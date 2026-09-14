@@ -59,26 +59,24 @@
     <!-- Per-Application Contextual Profiles (override any gestures per app) -->
     <key>Applications</key>
     <dict>
-        <!-- Example: Safari Tab Navigation Override (uncomment to activate) -->
-        <!--
-        <key>com.apple.Safari</key>
+        <!-- Visual Studio Code: Back/Forward navigates editor history (^ - and ^ ⇧ -) -->
+        <key>com.microsoft.VSCode</key>
         <dict>
-            <key>DragLeftAction</key>
+            <key>BackButtonAction</key>
             <dict>
                 <key>Type</key><string>Shortcut</string>
-                <key>KeyCode</key><integer>33</integer>
-                <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
-                <key>Comment</key><string>Previous Tab</string>
+                <key>KeyCode</key><integer>27</integer>
+                <key>Modifiers</key><array><string>Control</string></array>
+                <key>Comment</key><string>VS Code Navigate Back (Ctrl+-)</string>
             </dict>
-            <key>DragRightAction</key>
+            <key>ForwardButtonAction</key>
             <dict>
                 <key>Type</key><string>Shortcut</string>
-                <key>KeyCode</key><integer>30</integer>
-                <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
-                <key>Comment</key><string>Next Tab</string>
+                <key>KeyCode</key><integer>27</integer>
+                <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
+                <key>Comment</key><string>VS Code Navigate Forward (Ctrl+Shift+-)</string>
             </dict>
         </dict>
-        -->
     </dict>
 </dict>
 </plist>
