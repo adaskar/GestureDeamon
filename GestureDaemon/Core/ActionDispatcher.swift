@@ -24,7 +24,7 @@ public final class ActionDispatcher {
     public func dispatchNavigationBack() {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-            if ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.visualstudio.code.oss"].contains(frontApp) {
+            if frontApp.hasPrefix("com.microsoft.VSCode") || frontApp == "com.visualstudio.code.oss" || frontApp == "com.vscodium" {
                 // VS Code Go Back: Ctrl + -
                 self?.sendSyntheticShortcut(keyCode: 27, modifiers: ["Control"])
             } else {
@@ -37,7 +37,7 @@ public final class ActionDispatcher {
     public func dispatchNavigationForward() {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-            if ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.visualstudio.code.oss"].contains(frontApp) {
+            if frontApp.hasPrefix("com.microsoft.VSCode") || frontApp == "com.visualstudio.code.oss" || frontApp == "com.vscodium" {
                 // VS Code Go Forward: Ctrl + Shift + -
                 self?.sendSyntheticShortcut(keyCode: 27, modifiers: ["Control", "Shift"])
             } else {
@@ -141,7 +141,7 @@ public final class ActionDispatcher {
     }
 
     private func sendSyntheticShortcut(keyCode: CGKeyCode, modifiers: [String]) {
-        let loc = CGEventTapLocation.cgSessionEventTap
+        let loc = CGEventTapLocation.cghidEventTap
         let source = CGEventSource(stateID: .hidSystemState)
 
         var modKeyCodes: [CGKeyCode] = []
@@ -150,16 +150,16 @@ public final class ActionDispatcher {
             switch mod.lowercased() {
             case "control", "ctrl":
                 modKeyCodes.append(59)
-                flags.insert(.maskControl)
+                flags.insert([.maskControl, CGEventFlags(rawValue: 0x01)])
             case "option", "alt":
                 modKeyCodes.append(58)
-                flags.insert(.maskAlternate)
+                flags.insert([.maskAlternate, CGEventFlags(rawValue: 0x20)])
             case "shift":
                 modKeyCodes.append(56)
-                flags.insert(.maskShift)
+                flags.insert([.maskShift, CGEventFlags(rawValue: 0x02)])
             case "command", "cmd":
                 modKeyCodes.append(55)
-                flags.insert(.maskCommand)
+                flags.insert([.maskCommand, CGEventFlags(rawValue: 0x08)])
             default: break
             }
         }
@@ -176,6 +176,10 @@ public final class ActionDispatcher {
 
         if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true) {
             keyDown.flags = flags
+            if keyCode == 27 {
+                var char: UniChar = modifiers.map { $0.lowercased() }.contains("shift") ? 0x5F : 0x2D
+                keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
+            }
             keyDown.post(tap: loc)
         }
 
@@ -183,6 +187,10 @@ public final class ActionDispatcher {
 
         if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) {
             keyUp.flags = flags
+            if keyCode == 27 {
+                var char: UniChar = modifiers.map { $0.lowercased() }.contains("shift") ? 0x5F : 0x2D
+                keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
+            }
             keyUp.post(tap: loc)
         }
 

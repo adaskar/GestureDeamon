@@ -135,24 +135,34 @@ public final class ConfigManager {
     }
 
     public func effectiveAction(for slot: ActionSlot) -> ActionDefinition? {
-        let currentBundle = activeBundleIdentifier ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let currentBundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? activeBundleIdentifier
 
-        if let bundle = currentBundle, let profile = activeConfig.applications?[bundle] {
-            switch slot {
-            case .click:
-                if let action = profile.clickAction { return action }
-            case .dragLeft:
-                if let action = profile.dragLeftAction { return action }
-            case .dragRight:
-                if let action = profile.dragRightAction { return action }
-            case .dragUp:
-                if let action = profile.dragUpAction { return action }
-            case .dragDown:
-                if let action = profile.dragDownAction { return action }
-            case .backButton:
-                if let action = profile.backButtonAction { return action }
-            case .forwardButton:
-                if let action = profile.forwardButtonAction { return action }
+        if let bundle = currentBundle {
+            var profile = activeConfig.applications?[bundle]
+            if profile == nil && bundle.hasPrefix("com.microsoft.VSCode") {
+                profile = activeConfig.applications?["com.microsoft.VSCode"]
+            }
+            if profile == nil && (bundle == "com.visualstudio.code.oss" || bundle == "com.vscodium") {
+                profile = activeConfig.applications?["com.microsoft.VSCode"]
+            }
+
+            if let matchedProfile = profile {
+                switch slot {
+                case .click:
+                    if let action = matchedProfile.clickAction { return action }
+                case .dragLeft:
+                    if let action = matchedProfile.dragLeftAction { return action }
+                case .dragRight:
+                    if let action = matchedProfile.dragRightAction { return action }
+                case .dragUp:
+                    if let action = matchedProfile.dragUpAction { return action }
+                case .dragDown:
+                    if let action = matchedProfile.dragDownAction { return action }
+                case .backButton:
+                    if let action = matchedProfile.backButtonAction { return action }
+                case .forwardButton:
+                    if let action = matchedProfile.forwardButtonAction { return action }
+                }
             }
         }
 
