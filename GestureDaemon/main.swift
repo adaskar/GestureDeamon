@@ -7,6 +7,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = ConfigManager.shared
         MenuBarController.shared.setup()
 
+        DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.guru.GestureDaemon.reopen"),
+            object: nil, queue: .main
+        ) { _ in
+            MenuBarController.shared.handleAppReopen()
+        }
+
         if !AccessibilityHelper.verifyAccessibility(prompt: true) {
             Log.error("Accessibility permission missing. System prompt shown.")
         }
@@ -27,6 +34,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApplication.shared.terminate(nil)
         }
         sigtermSource.resume()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        MenuBarController.shared.handleAppReopen()
+        return true
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if MenuBarController.shared.isTemporarilyVisible || !MenuBarController.shared.hasVisibleStatusItem {
+            MenuBarController.shared.handleAppReopen()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -67,6 +85,24 @@ if isDiagnostics {
 
     while RunLoop.current.run(mode: .default, before: .distantFuture) {}
 } else {
+    // Single instance check: if already running, signal existing instance to show menu and exit
+    let bundleId = Bundle.main.bundleIdentifier ?? "com.guru.GestureDaemon"
+    let currentPid = ProcessInfo.processInfo.processIdentifier
+    let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
+    let otherInstances = runningApps.filter { $0.processIdentifier != currentPid }
+
+    if !otherInstances.isEmpty {
+        Log.info("GestureDaemon is already running (PID: \(otherInstances.first?.processIdentifier ?? 0)). Signaling existing instance...")
+        DistributedNotificationCenter.default().postNotificationName(
+            NSNotification.Name("com.guru.GestureDaemon.reopen"),
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+        otherInstances.first?.activate(options: .activateIgnoringOtherApps)
+        exit(0)
+    }
+
     let app = NSApplication.shared
     app.setActivationPolicy(.accessory)
     let delegate = AppDelegate()

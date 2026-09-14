@@ -87,6 +87,20 @@ public final class ConfigManager {
         }
     }
 
+    public func updateShowMenuBarIcon(_ show: Bool) {
+        let url = configURL
+        var dict: [String: Any] = [:]
+        if let data = try? Data(contentsOf: url),
+           let existing = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
+            dict = existing
+        }
+        dict["ShowMenuBarIcon"] = show
+        if let outputData = try? PropertyListSerialization.data(fromPropertyList: dict, format: .xml, options: 0) {
+            try? outputData.write(to: url, options: .atomic)
+            loadConfiguration()
+        }
+    }
+
     private func startMonitoringConfigFile() {
         let path = configURL.path
         let fd = open(path, O_EVTONLY)
