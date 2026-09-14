@@ -24,16 +24,16 @@
     <key>DragLeftAction</key>
     <dict>
         <key>Type</key><string>Shortcut</string>
-        <key>KeyCode</key><integer>123</integer>
+        <key>KeyCode</key><integer>124</integer>
         <key>Modifiers</key><array><string>Control</string></array>
-        <key>Comment</key><string>Space Left (Ctrl+Left)</string>
+        <key>Comment</key><string>Natural swipe left -&gt; switch to Right Space</string>
     </dict>
     <key>DragRightAction</key>
     <dict>
         <key>Type</key><string>Shortcut</string>
-        <key>KeyCode</key><integer>124</integer>
+        <key>KeyCode</key><integer>123</integer>
         <key>Modifiers</key><array><string>Control</string></array>
-        <key>Comment</key><string>Space Right (Ctrl+Right)</string>
+        <key>Comment</key><string>Natural swipe right -&gt; switch to Left Space</string>
     </dict>
     <key>DragUpAction</key>
     <dict>
