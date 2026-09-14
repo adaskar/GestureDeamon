@@ -3,15 +3,28 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.user.GestureDaemon</string>
+    <string>com.guru.GestureDaemon</string>
     <key>CFBundleName</key>
     <string>GestureDaemon</string>
+    <key>CFBundleDisplayName</key>
+    <string>GestureDaemon</string>
+    <key>CFBundleExecutable</key>
+    <string>GestureDaemon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>GestureDaemon requires Accessibility access to intercept mouse gesture buttons and trigger shortcuts.</string>
 </dict>
 </plist>
-

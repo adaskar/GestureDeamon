@@ -8,6 +8,7 @@ public final class EventTapManager {
     private var runLoopSource: CFRunLoopSource?
     private let stateMachine = GestureStateMachine()
     private var diagnosticMode = false
+    public var isPaused: Bool = false
 
     private init() {}
 
@@ -105,14 +106,17 @@ public final class EventTapManager {
         case .keyDown:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
             if keycode == 48 && event.flags.contains(.maskCommand) && event.flags.contains(.maskAlternate) {
-                _ = stateMachine.handleMagicDown()
+                if !isPaused {
+                    let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 200.0
+                    _ = stateMachine.handleMagicDown(windowDurationMs: windowMs)
+                }
                 clearSystemModifiers()
-                return nil // SWALLOW Tab key completely (prevents focus loss in active window)
+                return nil // ALWAYS SWALLOW Tab key completely (even if paused, prevents VS Code focus stealing)
             }
         case .keyUp:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keycode == 48 && stateMachine.isEngaged {
-                return nil // SWALLOW Tab key up
+            if keycode == 48 {
+                return nil // ALWAYS SWALLOW Tab key release
             }
         case .flagsChanged:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -127,8 +131,16 @@ public final class EventTapManager {
                 return nil // SWALLOW movement while gesture is engaged so cursor stays in place
             }
             return Unmanaged.passRetained(event)
+        default:
+            break
+        }
+
+        if isPaused {
+            return Unmanaged.passRetained(event)
+        }
 
         // 2. Standard multi-button mouse handling (Buttons 3, 4, 5, etc.)
+        switch type {
         case .otherMouseDown:
             let shouldSuppress = stateMachine.handleButtonDown(buttonNumber: buttonNumber)
             return shouldSuppress ? nil : Unmanaged.passRetained(event)

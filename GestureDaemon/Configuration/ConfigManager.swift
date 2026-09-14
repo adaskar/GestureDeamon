@@ -25,6 +25,8 @@ public struct AppConfig: Codable {
     public let triggerButtonIndex: Int64
     public let thresholdDistance: Double
     public let deadzoneRadius: Double
+    public let gestureWindowMs: Double?
+    public let showMenuBarIcon: Bool?
     public let swallowTriggerEvents: Bool
     public let clickAction: ActionDefinition?
     public let dragLeftAction: ActionDefinition?
@@ -36,6 +38,8 @@ public struct AppConfig: Codable {
         case triggerButtonIndex = "TriggerButtonIndex"
         case thresholdDistance = "ThresholdDistance"
         case deadzoneRadius = "DeadzoneRadius"
+        case gestureWindowMs = "GestureWindowMs"
+        case showMenuBarIcon = "ShowMenuBarIcon"
         case swallowTriggerEvents = "SwallowTriggerEvents"
         case clickAction = "ClickAction"
         case dragLeftAction = "DragLeftAction"
@@ -113,7 +117,8 @@ public final class ConfigManager {
 
     private static func fallbackDefaultConfig() -> AppConfig {
         AppConfig(
-            triggerButtonIndex: 5, thresholdDistance: 35.0, deadzoneRadius: 8.0, swallowTriggerEvents: true,
+            triggerButtonIndex: 5, thresholdDistance: 35.0, deadzoneRadius: 8.0,
+            gestureWindowMs: 200.0, showMenuBarIcon: true, swallowTriggerEvents: true,
             clickAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
             dragLeftAction: ActionDefinition(type: .shortcut, keyCode: 123, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
             dragRightAction: ActionDefinition(type: .shortcut, keyCode: 124, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),

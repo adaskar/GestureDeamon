@@ -15,7 +15,7 @@ public final class GestureStateMachine {
 
     public init() {}
 
-    public func handleMagicDown(windowDurationMs: Double = 400.0) -> Bool {
+    public func handleMagicDown(windowDurationMs: Double = 200.0) -> Bool {
         isTriggerEngaged = true
         accumulatedDeltaX = 0.0
         accumulatedDeltaY = 0.0

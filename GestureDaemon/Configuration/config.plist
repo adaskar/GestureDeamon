@@ -8,6 +8,10 @@
     <real>35.0</real>
     <key>DeadzoneRadius</key>
     <real>8.0</real>
+    <key>GestureWindowMs</key>
+    <real>200.0</real>
+    <key>ShowMenuBarIcon</key>
+    <true/>
     <key>SwallowTriggerEvents</key>
     <true/>
     <key>ClickAction</key>
