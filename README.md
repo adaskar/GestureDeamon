@@ -12,6 +12,7 @@ Built in pure Swift with zero third-party dependencies. Consumes **0.0% idle CPU
 - 🪟 **Native macOS Desktop Switching**: Ported reverse-engineered CoreGraphics Services (CGS) SPI with `NX_SECONDARYFNMASK` modifier injection for flawless Spaces transitions.
 - 🎯 **Mission Control & App Exposé**: Instant Exposé triggers via private `CoreDockSendNotification`.
 - 🧼 **Modifier Sanitization**: Unconditionally swallows Logitech's hardware fallback `Cmd+Option+Tab` thumb macro and clears modifier flags—preventing VS Code or browser tab bars from stealing focus.
+- 🧭 **Universal Side Button Navigation (Back & Forward)**: Intercepts thumb side buttons (Buttons 3 & 4) and translates them into instant history navigation (`Cmd+[` / `Cmd+]`) across Safari, Chrome, Finder, and smart code navigation (`Ctrl+-` / `Ctrl+Shift+-`) in VS Code.
 - 🎛 **Customizable `config.plist` with Live Hot-Reloading**: Edit settings in `~/.config/GestureDaemon/config.plist` and changes apply immediately without restarting.
 - 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), "Hide Menu Bar Icon" support with headless reopen recovery, and modern `SMAppService` launch-at-login integration.
 - 📦 **Standard DMG Packaging**: Automated `make dmg` drag-and-drop installer.
@@ -41,8 +42,9 @@ make install
 
 ---
 
-## Default Gestures (Logitech M720 / MX Master)
+## Default Controls & Gestures (Logitech M720 / MX Master)
 
+### Gestures (Thumb Button / Rest)
 Hold the **Thumb Gesture Button** (or flick your wrist) and release:
 
 | Gesture | Action | Implementation |
@@ -53,6 +55,14 @@ Hold the **Thumb Gesture Button** (or flick your wrist) and release:
 | **Flick Down** | App Exposé | `CoreDockSendNotification("com.apple.expose.front.awake")` |
 
 *Evaluation Window: 200 ms. Threshold: 35 pt. Deadzone: 8 pt.*
+
+### Side Navigation Buttons
+| Physical Button | Button Index | Default Action | Supported Contexts |
+|---|---|---|---|
+| **Back Button** | `3` | Navigate Back | Safari, Chrome, Finder (`Cmd + [`), VS Code (`Ctrl + -`) |
+| **Forward Button** | `4` | Navigate Forward | Safari, Chrome, Finder (`Cmd + ]`), VS Code (`Ctrl + Shift + -`) |
+
+*Configurable via `BackButtonAction` and `ForwardButtonAction` in `config.plist`.*
 
 ---
 
@@ -67,3 +77,4 @@ For deep technical details, parameter dictionaries, keycode reference tables, pr
 ## License
 
 MIT License. Crafted with precision for macOS.
+

@@ -143,6 +143,24 @@ Below is the annotated XML schema for `config.plist`:
     <key>SwallowTriggerEvents</key>
     <true/>
 
+    <!-- Enable system-wide side navigation buttons (Back / Forward) -->
+    <key>EnableSideButtons</key>
+    <true/>
+
+    <!-- Hardware button index for Back (Default: 3) -->
+    <key>BackButtonIndex</key>
+    <integer>3</integer>
+
+    <!-- Hardware button index for Forward (Default: 4) -->
+    <key>ForwardButtonIndex</key>
+    <integer>4</integer>
+
+    <!-- Optional custom action for Back button (omitted = smart navigation back: Cmd+[ / VS Code Ctrl+-) -->
+    <!-- <key>BackButtonAction</key><dict> ... </dict> -->
+
+    <!-- Optional custom action for Forward button (omitted = smart navigation forward: Cmd+] / VS Code Ctrl+Shift+-) -->
+    <!-- <key>ForwardButtonAction</key><dict> ... </dict> -->
+
     <!-- Action executed on a stationary click (no drag) -->
     <key>ClickAction</key>
     <dict> ... </dict>
@@ -176,6 +194,11 @@ Below is the annotated XML schema for `config.plist`:
 | `GestureWindowMs` | Real | `200.0` | Evaluation window in milliseconds. If the button is released or remains stationary within this window, `ClickAction` fires. If swiped beyond `ThresholdDistance` within this window, the corresponding directional action fires immediately. |
 | `ShowMenuBarIcon` | Boolean | `true` | When `true`, displays the status icon in the macOS menu bar. When `false`, runs headlessly in the background. |
 | `SwallowTriggerEvents`| Boolean | `true` | When `true`, prevents the underlying button press from reaching the frontmost application. |
+| `EnableSideButtons` | Boolean | `true` | When `true`, intercepts mouse side buttons and converts them to navigation actions. |
+| `BackButtonIndex` | Integer | `3` | Button index representing the physical Back button (default `3`). |
+| `ForwardButtonIndex` | Integer | `4` | Button index representing the physical Forward button (default `4`). |
+| `BackButtonAction` | Dictionary | *Smart Back* | Custom action for Back button. If omitted, uses intelligent Back (`Cmd + [` in browsers/Finder, `Ctrl + -` in VS Code). |
+| `ForwardButtonAction` | Dictionary | *Smart Forward* | Custom action for Forward button. If omitted, uses intelligent Forward (`Cmd + ]` in browsers/Finder, `Ctrl + Shift + -` in VS Code). |
 
 ---
 
@@ -422,3 +445,4 @@ While GestureDaemon currently provides full feature parity with Logitech Options
 ## 4. Summary
 
 GestureDaemon demonstrates that high-performance macOS utilities do not require multi-gigabyte Electron runtimes, background telemetry daemons, or heavy proprietary suites. By pairing clean Swift architecture with direct macOS SPI and ephemeral resource management, GestureDaemon delivers instant responsiveness, absolute privacy, and true 0.0% idle system impact.
+

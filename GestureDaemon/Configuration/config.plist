@@ -14,6 +14,12 @@
     <true/>
     <key>SwallowTriggerEvents</key>
     <true/>
+    <key>EnableSideButtons</key>
+    <true/>
+    <key>BackButtonIndex</key>
+    <integer>3</integer>
+    <key>ForwardButtonIndex</key>
+    <integer>4</integer>
     <key>ClickAction</key>
     <dict>
         <key>Type</key><string>Shortcut</string>

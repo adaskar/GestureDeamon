@@ -21,6 +21,32 @@ public final class ActionDispatcher {
         }
     }
 
+    public func dispatchNavigationBack() {
+        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+            let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+            if ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.visualstudio.code.oss"].contains(frontApp) {
+                // VS Code Go Back: Ctrl + -
+                self?.sendSyntheticShortcut(keyCode: 27, modifiers: ["Control"])
+            } else {
+                // Universal macOS Navigation Back: Cmd + [
+                self?.sendSyntheticShortcut(keyCode: 33, modifiers: ["Command"])
+            }
+        }
+    }
+
+    public func dispatchNavigationForward() {
+        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+            let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+            if ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.visualstudio.code.oss"].contains(frontApp) {
+                // VS Code Go Forward: Ctrl + Shift + -
+                self?.sendSyntheticShortcut(keyCode: 27, modifiers: ["Control", "Shift"])
+            } else {
+                // Universal macOS Navigation Forward: Cmd + ]
+                self?.sendSyntheticShortcut(keyCode: 30, modifiers: ["Command"])
+            }
+        }
+    }
+
     private func execute(action: ActionDefinition) {
         switch action.type {
         case .shortcut:

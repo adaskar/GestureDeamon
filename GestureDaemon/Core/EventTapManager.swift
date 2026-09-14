@@ -191,6 +191,38 @@ public final class EventTapManager {
 
         // 2. Standard multi-button mouse handling (Buttons 3, 4, 5, etc.)
         let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
+        let config = ConfigManager.shared.activeConfig
+
+        // 3. Side Navigation Buttons (Back & Forward)
+        if config.enableSideButtons ?? true {
+            let backIndex = config.backButtonIndex ?? 3
+            let forwardIndex = config.forwardButtonIndex ?? 4
+
+            if buttonNumber != config.triggerButtonIndex {
+                if buttonNumber == backIndex {
+                    if type == .otherMouseDown {
+                        Log.info("Mouse Back button clicked (Button \(buttonNumber))")
+                        if let customAction = config.backButtonAction {
+                            ActionDispatcher.shared.dispatch(action: customAction)
+                        } else {
+                            ActionDispatcher.shared.dispatchNavigationBack()
+                        }
+                    }
+                    return nil // Swallow down, up, and drag for side navigation button
+                } else if buttonNumber == forwardIndex {
+                    if type == .otherMouseDown {
+                        Log.info("Mouse Forward button clicked (Button \(buttonNumber))")
+                        if let customAction = config.forwardButtonAction {
+                            ActionDispatcher.shared.dispatch(action: customAction)
+                        } else {
+                            ActionDispatcher.shared.dispatchNavigationForward()
+                        }
+                    }
+                    return nil // Swallow down, up, and drag for side navigation button
+                }
+            }
+        }
+
         switch type {
         case .otherMouseDown:
             let shouldSuppress = stateMachine.handleButtonDown(buttonNumber: buttonNumber)

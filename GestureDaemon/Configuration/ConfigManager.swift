@@ -34,6 +34,13 @@ public struct AppConfig: Codable {
     public let dragUpAction: ActionDefinition?
     public let dragDownAction: ActionDefinition?
 
+    // Side Navigation Buttons (Back / Forward)
+    public let enableSideButtons: Bool?
+    public let backButtonIndex: Int64?
+    public let forwardButtonIndex: Int64?
+    public let backButtonAction: ActionDefinition?
+    public let forwardButtonAction: ActionDefinition?
+
     enum CodingKeys: String, CodingKey {
         case triggerButtonIndex = "TriggerButtonIndex"
         case thresholdDistance = "ThresholdDistance"
@@ -46,6 +53,11 @@ public struct AppConfig: Codable {
         case dragRightAction = "DragRightAction"
         case dragUpAction = "DragUpAction"
         case dragDownAction = "DragDownAction"
+        case enableSideButtons = "EnableSideButtons"
+        case backButtonIndex = "BackButtonIndex"
+        case forwardButtonIndex = "ForwardButtonIndex"
+        case backButtonAction = "BackButtonAction"
+        case forwardButtonAction = "ForwardButtonAction"
     }
 }
 
@@ -137,7 +149,12 @@ public final class ConfigManager {
             dragLeftAction: ActionDefinition(type: .shortcut, keyCode: 124, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
             dragRightAction: ActionDefinition(type: .shortcut, keyCode: 123, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
             dragUpAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
-            dragDownAction: ActionDefinition(type: .shortcut, keyCode: 125, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil)
+            dragDownAction: ActionDefinition(type: .shortcut, keyCode: 125, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
+            enableSideButtons: true,
+            backButtonIndex: 3,
+            forwardButtonIndex: 4,
+            backButtonAction: nil,
+            forwardButtonAction: nil
         )
     }
 }
