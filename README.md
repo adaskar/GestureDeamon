@@ -13,6 +13,7 @@ Built in pure Swift with zero third-party dependencies. Consumes **0.0% idle CPU
 - 🎯 **Mission Control & App Exposé**: Instant Exposé triggers via private `CoreDockSendNotification`.
 - 🧼 **Modifier Sanitization**: Unconditionally swallows Logitech's hardware fallback `Cmd+Option+Tab` thumb macro and clears modifier flags—preventing VS Code or browser tab bars from stealing focus.
 - 🧭 **Universal Side Button Navigation (Back & Forward)**: Intercepts thumb side buttons (Buttons 3 & 4) and translates them into instant history navigation (`Cmd+[` / `Cmd+]`) across Safari, Chrome, Finder, and smart code navigation (`Ctrl+-` / `Ctrl+Shift+-`) in VS Code.
+- 📱 **Per-Application Contextual Profiles**: Override any gesture or button mapping for specific apps (e.g. Safari tab navigation, VS Code terminal toggle) with automatic frontmost detection and global fallback.
 - 🎛 **Customizable `config.plist` with Live Hot-Reloading**: Edit settings in `~/.config/GestureDaemon/config.plist` and changes apply immediately without restarting.
 - 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), "Hide Menu Bar Icon" support with headless reopen recovery, and modern `SMAppService` launch-at-login integration.
 - 📦 **Standard DMG Packaging**: Automated `make dmg` drag-and-drop installer.

@@ -202,7 +202,7 @@ public final class EventTapManager {
                 if buttonNumber == backIndex {
                     if type == .otherMouseDown {
                         Log.info("Mouse Back button clicked (Button \(buttonNumber))")
-                        if let customAction = config.backButtonAction {
+                        if let customAction = ConfigManager.shared.effectiveAction(for: .backButton) {
                             ActionDispatcher.shared.dispatch(action: customAction)
                         } else {
                             ActionDispatcher.shared.dispatchNavigationBack()
@@ -212,7 +212,7 @@ public final class EventTapManager {
                 } else if buttonNumber == forwardIndex {
                     if type == .otherMouseDown {
                         Log.info("Mouse Forward button clicked (Button \(buttonNumber))")
-                        if let customAction = config.forwardButtonAction {
+                        if let customAction = ConfigManager.shared.effectiveAction(for: .forwardButton) {
                             ActionDispatcher.shared.dispatch(action: customAction)
                         } else {
                             ActionDispatcher.shared.dispatchNavigationForward()

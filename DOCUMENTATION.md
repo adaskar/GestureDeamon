@@ -398,20 +398,75 @@ For custom shortcuts, refer to standard macOS virtual keycodes:
 
 ---
 
+### Per-Application Contextual Profiles (`Applications`)
+
+GestureDaemon allows you to define application-specific overrides under the `<key>Applications</key>` dictionary. When an application becomes frontmost, GestureDaemon automatically switches to that app's profile with **zero latency** ($O(1)$ memory lookup via cached `NSWorkspace.didActivateApplicationNotification`).
+
+Any action omitted in an app profile gracefully falls back to your global configuration.
+
+#### How to Find Any App's Bundle Identifier
+Run this command in Terminal to print the bundle ID of any installed app:
+```bash
+osascript -e 'id of app "Safari"'        # Returns: com.apple.Safari
+osascript -e 'id of app "Visual Studio Code"' # Returns: com.microsoft.VSCode
+osascript -e 'id of app "Google Chrome"' # Returns: com.google.Chrome
+osascript -e 'id of app "Finder"'        # Returns: com.apple.finder
+```
+
+#### Example Configuration: Safari & Final Cut Pro Overrides
+Add this to your `~/.config/GestureDaemon/config.plist`:
+
+```xml
+<key>Applications</key>
+<dict>
+    <!-- Safari: Flick Left/Right cycles tabs instead of switching desktop spaces -->
+    <key>com.apple.Safari</key>
+    <dict>
+        <!-- Drag Left: Previous Tab (Cmd+Shift+[) -->
+        <key>DragLeftAction</key>
+        <dict>
+            <key>Type</key><string>Shortcut</string>
+            <key>KeyCode</key><integer>33</integer>
+            <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
+            <key>Comment</key><string>Previous Tab</string>
+        </dict>
+
+        <!-- Drag Right: Next Tab (Cmd+Shift+]) -->
+        <key>DragRightAction</key>
+        <dict>
+            <key>Type</key><string>Shortcut</string>
+            <key>KeyCode</key><integer>30</integer>
+            <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
+            <key>Comment</key><string>Next Tab</string>
+        </dict>
+    </dict>
+
+    <!-- Visual Studio Code: Map thumb button click to Toggle Terminal -->
+    <key>com.microsoft.VSCode</key>
+    <dict>
+        <key>ClickAction</key>
+        <dict>
+            <key>Type</key><string>Shortcut</string>
+            <key>KeyCode</key><integer>50</integer>
+            <key>Modifiers</key><array><string>Control</string></array>
+            <key>Comment</key><string>Toggle Terminal (Ctrl+`)</string>
+        </dict>
+    </dict>
+</dict>
+```
+
+---
+
 ## 3. Future Roadmap (What We Can Do Next)
 
-While GestureDaemon currently provides full feature parity with Logitech Options+ gesture switching without the battery and CPU penalties, here are the most impactful capabilities we can implement next:
+While GestureDaemon currently provides full feature parity with Logitech Options+ gesture switching without the battery and CPU penalties, here are the most impactful capabilities on our roadmap:
 
 ### 1. Direct Bluetooth LE HID++ Support
 - **Current State**: `HIDPlusPlusManager` currently listens via `IOHIDManager` for USB receivers (Vendor ID `0x046d`, Usage Page `0xFF00`). When connected over Bluetooth, Logitech mice default to standard HID descriptor emulation and send the thumb button via the fallback keyboard macro (`Cmd+Option+Tab`).
 - **Improvement**: Implement direct Bluetooth HID++ parsing using `IOBluetooth` / `CoreBluetooth` or custom L2CAP channel listening. This would allow reading battery levels, setting DPI on the fly, and toggling SmartShift ratchet mode directly over Bluetooth without requiring a USB Unifying/Bolt receiver.
 
-### 2. Per-Application Contextual Profiles
-- **Concept**: Automatically swap gesture bindings depending on the currently active application.
-- **Implementation**:
-  - Observe `NSWorkspace.didActivateApplicationNotification`.
-  - In `config.plist`, allow an optional `Applications` dictionary (e.g. `com.apple.Safari`, `com.apple.FinalCut`, `com.microsoft.VSCode`).
-  - *Example*: In Safari, Drag Left/Right triggers Back/Forward; in Final Cut Pro, Drag Left/Right scrubs the timeline; in Finder, Drag Left/Right switches Spaces.
+### 2. Per-Application Contextual Profiles (Completed in v1.2)
+- ✅ Implemented via `NSWorkspace.didActivateApplicationNotification` and `<key>Applications</key>` dictionary with hierarchical action resolution.
 
 ### 3. Diagonal & 8-Way Gesture Recognition
 - **Concept**: Expand from 4 cardinal directions (Left, Right, Up, Down) to 8 directions by evaluating the angle $\theta = \operatorname{atan2}(\Delta y, \Delta x)$:

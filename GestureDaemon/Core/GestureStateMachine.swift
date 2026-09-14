@@ -31,8 +31,8 @@ public final class GestureStateMachine {
             guard let self = self, self.isTriggerEngaged else { return }
             if !self.gestureConsumed {
                 Log.info("Click detected on magic thumb button (stationary tap)")
-                let config = ConfigManager.shared.activeConfig
-                ActionDispatcher.shared.dispatch(action: config.clickAction)
+                let action = ConfigManager.shared.effectiveAction(for: .click)
+                ActionDispatcher.shared.dispatch(action: action)
             }
             self.isTriggerEngaged = false
             self.accumulatedDeltaX = 0.0
@@ -83,7 +83,8 @@ public final class GestureStateMachine {
         guard buttonNumber == config.triggerButtonIndex else { return false }
         if isTriggerEngaged && !gestureConsumed {
             Log.info("Click detected on trigger button (\(buttonNumber))")
-            ActionDispatcher.shared.dispatch(action: config.clickAction)
+            let action = ConfigManager.shared.effectiveAction(for: .click)
+            ActionDispatcher.shared.dispatch(action: action)
         }
         isTriggerEngaged = false
         accumulatedDeltaX = 0.0
@@ -99,12 +100,23 @@ public final class GestureStateMachine {
     }
 
     private func executeDirectionalAction(_ direction: GestureDirection) {
-        let config = ConfigManager.shared.activeConfig
         switch direction {
-        case .left:  Log.info("Gesture: Drag Left");  ActionDispatcher.shared.dispatch(action: config.dragLeftAction)
-        case .right: Log.info("Gesture: Drag Right"); ActionDispatcher.shared.dispatch(action: config.dragRightAction)
-        case .up:    Log.info("Gesture: Drag Up");    ActionDispatcher.shared.dispatch(action: config.dragUpAction)
-        case .down:  Log.info("Gesture: Drag Down");  ActionDispatcher.shared.dispatch(action: config.dragDownAction)
+        case .left:
+            Log.info("Gesture: Drag Left")
+            let action = ConfigManager.shared.effectiveAction(for: .dragLeft)
+            ActionDispatcher.shared.dispatch(action: action)
+        case .right:
+            Log.info("Gesture: Drag Right")
+            let action = ConfigManager.shared.effectiveAction(for: .dragRight)
+            ActionDispatcher.shared.dispatch(action: action)
+        case .up:
+            Log.info("Gesture: Drag Up")
+            let action = ConfigManager.shared.effectiveAction(for: .dragUp)
+            ActionDispatcher.shared.dispatch(action: action)
+        case .down:
+            Log.info("Gesture: Drag Down")
+            let action = ConfigManager.shared.effectiveAction(for: .dragDown)
+            ActionDispatcher.shared.dispatch(action: action)
         }
     }
 }
