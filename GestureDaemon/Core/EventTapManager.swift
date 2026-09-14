@@ -4,81 +4,127 @@ import CoreGraphics
 public final class EventTapManager {
     public static let shared = EventTapManager()
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private var primaryEventTap: CFMachPort?
+    private var primaryRunLoopSource: CFRunLoopSource?
+
+    private var motionEventTap: CFMachPort?
+    private var motionRunLoopSource: CFRunLoopSource?
+
     private let stateMachine = GestureStateMachine()
     private var diagnosticMode = false
     public var isPaused: Bool = false
 
-    private init() {}
+    private init() {
+        stateMachine.onEngagementChanged = { [weak self] engaged in
+            self?.setMotionTrackingEnabled(engaged)
+        }
+    }
 
-    public func enableDiagnostics(_ enabled: Bool) { self.diagnosticMode = enabled }
+    public func enableDiagnostics(_ enabled: Bool) {
+        self.diagnosticMode = enabled
+    }
+
+    public func setMotionTrackingEnabled(_ enabled: Bool) {
+        guard let tap = motionEventTap else { return }
+        CGEvent.tapEnable(tap: tap, enable: enabled)
+    }
 
     public func start() {
-        var eventMask: CGEventMask = (1 << CGEventType.otherMouseDown.rawValue)
-                                  | (1 << CGEventType.otherMouseUp.rawValue)
-                                  | (1 << CGEventType.otherMouseDragged.rawValue)
-                                  | (1 << CGEventType.mouseMoved.rawValue)
-                                  | (1 << CGEventType.keyDown.rawValue)
-                                  | (1 << CGEventType.keyUp.rawValue)
-                                  | (1 << CGEventType.flagsChanged.rawValue)
-
-        if diagnosticMode {
-            eventMask |= (1 << CGEventType.leftMouseDown.rawValue)
-                      | (1 << CGEventType.leftMouseUp.rawValue)
-                      | (1 << CGEventType.rightMouseDown.rawValue)
-                      | (1 << CGEventType.rightMouseUp.rawValue)
-        }
-
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
-        guard let tap = CGEvent.tapCreate(
+        // 1. Primary tap: buttons, keys, modifiers. EXCLUDES mouseMoved for zero CPU usage while moving mouse!
+        var primaryMask: CGEventMask = (1 << CGEventType.otherMouseDown.rawValue)
+                                     | (1 << CGEventType.otherMouseUp.rawValue)
+                                     | (1 << CGEventType.otherMouseDragged.rawValue)
+                                     | (1 << CGEventType.keyDown.rawValue)
+                                     | (1 << CGEventType.keyUp.rawValue)
+                                     | (1 << CGEventType.flagsChanged.rawValue)
+
+        if diagnosticMode {
+            primaryMask |= (1 << CGEventType.leftMouseDown.rawValue)
+                        | (1 << CGEventType.leftMouseUp.rawValue)
+                        | (1 << CGEventType.rightMouseDown.rawValue)
+                        | (1 << CGEventType.rightMouseUp.rawValue)
+        }
+
+        guard let pTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: eventMask,
+            eventsOfInterest: primaryMask,
             callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
                 guard let refcon = refcon else { return Unmanaged.passRetained(event) }
                 let manager = Unmanaged<EventTapManager>.fromOpaque(refcon).takeUnretainedValue()
-                return manager.handleEvent(proxy: proxy, type: type, event: event)
+                return manager.handlePrimaryEvent(proxy: proxy, type: type, event: event)
             },
             userInfo: observer
         ) else {
-            Log.error("Failed to create CGEventTap. Check Accessibility permission.")
+            Log.error("Failed to create primary CGEventTap. Check Accessibility permission.")
             return
         }
 
-        self.eventTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        self.runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-        Log.info("CGEventTap engaged.")
+        self.primaryEventTap = pTap
+        let pSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, pTap, 0)
+        self.primaryRunLoopSource = pSource
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), pSource, .commonModes)
+        CGEvent.tapEnable(tap: pTap, enable: true)
+
+        // 2. Motion tap: mouseMoved ONLY. Created disabled, dynamically enabled ONLY during the 200ms flick window!
+        let motionMask: CGEventMask = (1 << CGEventType.mouseMoved.rawValue)
+        if let mTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: motionMask,
+            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+                guard let refcon = refcon else { return Unmanaged.passRetained(event) }
+                let manager = Unmanaged<EventTapManager>.fromOpaque(refcon).takeUnretainedValue()
+                return manager.handleMotionEvent(proxy: proxy, type: type, event: event)
+            },
+            userInfo: observer
+        ) {
+            self.motionEventTap = mTap
+            let mSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mTap, 0)
+            self.motionRunLoopSource = mSource
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), mSource, .commonModes)
+            // Start DISABLED! Zero overhead during all normal mouse cursor movement
+            CGEvent.tapEnable(tap: mTap, enable: false)
+        }
+
+        Log.info("Event taps engaged (optimized low-CPU mode).")
     }
 
     public func stop() {
-        guard let tap = eventTap else { return }
-        CGEvent.tapEnable(tap: tap, enable: false)
-        if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        if let tap = primaryEventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = primaryRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+            }
         }
-        self.eventTap = nil
-        self.runLoopSource = nil
-        Log.info("CGEventTap disconnected.")
+        if let mTap = motionEventTap {
+            CGEvent.tapEnable(tap: mTap, enable: false)
+            if let mSource = motionRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), mSource, .commonModes)
+            }
+        }
+        self.primaryEventTap = nil
+        self.primaryRunLoopSource = nil
+        self.motionEventTap = nil
+        self.motionRunLoopSource = nil
+        Log.info("Event taps disconnected.")
     }
 
-    private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    private func handlePrimaryEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            Log.error("EventTap disabled by macOS. Re-enabling...")
-            if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            Log.error("Primary EventTap disabled by macOS. Re-enabling...")
+            if let tap = primaryEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passRetained(event)
         }
-
-        let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
 
         if diagnosticMode {
             switch type {
             case .otherMouseDown, .otherMouseUp, .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp:
+                let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
                 print("[DIAGNOSTIC] Mouse Event: type=\(type.rawValue), buttonNumber=\(buttonNumber)")
             case .keyDown, .keyUp:
                 let keycode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -90,12 +136,6 @@ public final class EventTapManager {
                 let isAlt = event.flags.contains(.maskAlternate)
                 let isShift = event.flags.contains(.maskShift)
                 print("[DIAGNOSTIC] Flags Changed: keyCode=\(keycode), flags=0x\(String(event.flags.rawValue, radix: 16)) (Cmd:\(isCmd) Ctrl:\(isCtrl) Alt:\(isAlt) Shift:\(isShift))")
-            case .mouseMoved:
-                if stateMachine.isEngaged {
-                    let dx = event.getDoubleValueField(.mouseEventDeltaX)
-                    let dy = event.getDoubleValueField(.mouseEventDeltaY)
-                    print("[DIAGNOSTIC] Mouse Moved while Engaged: dx=\(dx), dy=\(dy)")
-                }
             default:
                 break
             }
@@ -123,14 +163,6 @@ public final class EventTapManager {
             if stateMachine.isEngaged && (keycode == 55 || keycode == 58 || keycode == 0) {
                 return nil // SWALLOW modifier changes while magic gesture window is active
             }
-        case .mouseMoved:
-            if stateMachine.isEngaged {
-                let dx = event.getDoubleValueField(.mouseEventDeltaX)
-                let dy = event.getDoubleValueField(.mouseEventDeltaY)
-                _ = stateMachine.handleMouseDragged(deltaX: dx, deltaY: dy)
-                return nil // SWALLOW movement while gesture is engaged so cursor stays in place
-            }
-            return Unmanaged.passRetained(event)
         default:
             break
         }
@@ -140,6 +172,7 @@ public final class EventTapManager {
         }
 
         // 2. Standard multi-button mouse handling (Buttons 3, 4, 5, etc.)
+        let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
         switch type {
         case .otherMouseDown:
             let shouldSuppress = stateMachine.handleButtonDown(buttonNumber: buttonNumber)
@@ -157,6 +190,27 @@ public final class EventTapManager {
         }
 
         return Unmanaged.passRetained(event)
+    }
+
+    private func handleMotionEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let tap = motionEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return Unmanaged.passRetained(event)
+        }
+
+        guard type == .mouseMoved, stateMachine.isEngaged else {
+            return Unmanaged.passRetained(event)
+        }
+
+        let dx = event.getDoubleValueField(.mouseEventDeltaX)
+        let dy = event.getDoubleValueField(.mouseEventDeltaY)
+
+        if diagnosticMode {
+            print("[DIAGNOSTIC] Mouse Moved while Engaged: dx=\(dx), dy=\(dy)")
+        }
+
+        _ = stateMachine.handleMouseDragged(deltaX: dx, deltaY: dy)
+        return nil // Swallow movement while gesture is engaged so cursor stays in place
     }
 
     private func clearSystemModifiers() {

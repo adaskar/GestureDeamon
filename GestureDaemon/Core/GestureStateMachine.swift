@@ -12,6 +12,7 @@ public final class GestureStateMachine {
     private var magicGestureTimer: DispatchSourceTimer?
 
     public var isEngaged: Bool { isTriggerEngaged }
+    public var onEngagementChanged: ((Bool) -> Void)?
 
     public init() {}
 
@@ -20,6 +21,7 @@ public final class GestureStateMachine {
         accumulatedDeltaX = 0.0
         accumulatedDeltaY = 0.0
         gestureConsumed = false
+        onEngagementChanged?(true)
         Log.info("Magic thumb button engaged (waiting for flick gesture or click timeout)...")
 
         magicGestureTimer?.cancel()
@@ -36,6 +38,7 @@ public final class GestureStateMachine {
             self.accumulatedDeltaX = 0.0
             self.accumulatedDeltaY = 0.0
             self.gestureConsumed = false
+            self.onEngagementChanged?(false)
         }
         timer.resume()
         self.magicGestureTimer = timer
@@ -43,7 +46,6 @@ public final class GestureStateMachine {
     }
 
     public func handleMagicUp() -> Bool {
-        // Kept for manual completion if needed
         return true
     }
 
@@ -54,6 +56,7 @@ public final class GestureStateMachine {
         accumulatedDeltaX = 0.0
         accumulatedDeltaY = 0.0
         gestureConsumed = false
+        onEngagementChanged?(true)
         return config.swallowTriggerEvents
     }
 
@@ -69,6 +72,7 @@ public final class GestureStateMachine {
             magicGestureTimer?.cancel()
             magicGestureTimer = nil
             isTriggerEngaged = false
+            onEngagementChanged?(false)
             executeDirectionalAction(resolveDirection(dx: accumulatedDeltaX, dy: accumulatedDeltaY))
         }
         return config.swallowTriggerEvents
@@ -85,6 +89,7 @@ public final class GestureStateMachine {
         accumulatedDeltaX = 0.0
         accumulatedDeltaY = 0.0
         gestureConsumed = false
+        onEngagementChanged?(false)
         return config.swallowTriggerEvents
     }
 
@@ -103,4 +108,3 @@ public final class GestureStateMachine {
         }
     }
 }
-
