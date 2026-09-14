@@ -25,14 +25,18 @@ public final class EventTapManager {
     }
 
     public func setMotionTrackingEnabled(_ enabled: Bool) {
-        guard let tap = motionEventTap else { return }
-        CGEvent.tapEnable(tap: tap, enable: enabled)
+        if enabled {
+            startMotionTap()
+        } else {
+            stopMotionTap()
+        }
     }
 
     public func start() {
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
-        // 1. Primary tap: buttons, keys, modifiers. EXCLUDES mouseMoved for zero CPU usage while moving mouse!
+        // Primary tap: buttons, keys, modifiers.
+        // mouseMoved is NEVER in primaryMask so normal mouse/trackpad motion has ZERO CPU overhead!
         var primaryMask: CGEventMask = (1 << CGEventType.otherMouseDown.rawValue)
                                      | (1 << CGEventType.otherMouseUp.rawValue)
                                      | (1 << CGEventType.otherMouseDragged.rawValue)
@@ -69,9 +73,15 @@ public final class EventTapManager {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), pSource, .commonModes)
         CGEvent.tapEnable(tap: pTap, enable: true)
 
-        // 2. Motion tap: mouseMoved ONLY. Created disabled, dynamically enabled ONLY during the 200ms flick window!
+        Log.info("Primary event tap engaged (zero motion overhead).")
+    }
+
+    private func startMotionTap() {
+        guard motionEventTap == nil else { return }
+        let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         let motionMask: CGEventMask = (1 << CGEventType.mouseMoved.rawValue)
-        if let mTap = CGEvent.tapCreate(
+
+        guard let mTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
@@ -82,16 +92,27 @@ public final class EventTapManager {
                 return manager.handleMotionEvent(proxy: proxy, type: type, event: event)
             },
             userInfo: observer
-        ) {
-            self.motionEventTap = mTap
-            let mSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mTap, 0)
-            self.motionRunLoopSource = mSource
-            CFRunLoopAddSource(CFRunLoopGetCurrent(), mSource, .commonModes)
-            // Start DISABLED! Zero overhead during all normal mouse cursor movement
-            CGEvent.tapEnable(tap: mTap, enable: false)
+        ) else {
+            Log.error("Failed to create dynamic motion CGEventTap.")
+            return
         }
 
-        Log.info("Event taps engaged (optimized low-CPU mode).")
+        self.motionEventTap = mTap
+        let mSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mTap, 0)
+        self.motionRunLoopSource = mSource
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), mSource, .commonModes)
+        CGEvent.tapEnable(tap: mTap, enable: true)
+    }
+
+    private func stopMotionTap() {
+        guard let mTap = motionEventTap else { return }
+        CGEvent.tapEnable(tap: mTap, enable: false)
+        if let mSource = motionRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), mSource, .commonModes)
+        }
+        CFMachPortInvalidate(mTap)
+        self.motionEventTap = nil
+        self.motionRunLoopSource = nil
     }
 
     public func stop() {
@@ -100,24 +121,21 @@ public final class EventTapManager {
             if let source = primaryRunLoopSource {
                 CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
             }
-        }
-        if let mTap = motionEventTap {
-            CGEvent.tapEnable(tap: mTap, enable: false)
-            if let mSource = motionRunLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), mSource, .commonModes)
-            }
+            CFMachPortInvalidate(tap)
         }
         self.primaryEventTap = nil
         self.primaryRunLoopSource = nil
-        self.motionEventTap = nil
-        self.motionRunLoopSource = nil
+        stopMotionTap()
         Log.info("Event taps disconnected.")
     }
 
     private func handlePrimaryEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            Log.error("Primary EventTap disabled by macOS. Re-enabling...")
+        if type == .tapDisabledByTimeout {
+            Log.error("Primary EventTap disabled by macOS timeout. Re-enabling...")
             if let tap = primaryEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return Unmanaged.passRetained(event)
+        }
+        if type == .tapDisabledByUserInput {
             return Unmanaged.passRetained(event)
         }
 
@@ -193,8 +211,11 @@ public final class EventTapManager {
     }
 
     private func handleMotionEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if type == .tapDisabledByTimeout {
             if let tap = motionEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return Unmanaged.passRetained(event)
+        }
+        if type == .tapDisabledByUserInput {
             return Unmanaged.passRetained(event)
         }
 
