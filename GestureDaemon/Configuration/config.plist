@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>TriggerButtonIndex</key>
+    <integer>5</integer>
+    <key>ThresholdDistance</key>
+    <real>35.0</real>
+    <key>DeadzoneRadius</key>
+    <real>8.0</real>
+    <key>SwallowTriggerEvents</key>
+    <true/>
+    <key>ClickAction</key>
+    <dict>
+        <key>Type</key><string>Shortcut</string>
+        <key>KeyCode</key><integer>126</integer>
+        <key>Modifiers</key><array><string>Control</string></array>
+        <key>Comment</key><string>Mission Control (Ctrl+Up)</string>
+    </dict>
+    <key>DragLeftAction</key>
+    <dict>
+        <key>Type</key><string>Shortcut</string>
+        <key>KeyCode</key><integer>123</integer>
+        <key>Modifiers</key><array><string>Control</string></array>
+        <key>Comment</key><string>Space Left (Ctrl+Left)</string>
+    </dict>
+    <key>DragRightAction</key>
+    <dict>
+        <key>Type</key><string>Shortcut</string>
+        <key>KeyCode</key><integer>124</integer>
+        <key>Modifiers</key><array><string>Control</string></array>
+        <key>Comment</key><string>Space Right (Ctrl+Right)</string>
+    </dict>
+    <key>DragUpAction</key>
+    <dict>
+        <key>Type</key><string>Shortcut</string>
+        <key>KeyCode</key><integer>126</integer>
+        <key>Modifiers</key><array><string>Control</string></array>
+        <key>Comment</key><string>Mission Control</string>
+    </dict>
+    <key>DragDownAction</key>
+    <dict>
+        <key>Type</key><string>Shortcut</string>
+        <key>KeyCode</key><integer>125</integer>
+        <key>Modifiers</key><array><string>Control</string></array>
+        <key>Comment</key><string>App Expose (Ctrl+Down)</string>
+    </dict>
+</dict>
+</plist>
+

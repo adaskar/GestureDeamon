@@ -1,0 +1,124 @@
+import Foundation
+
+public struct ActionDefinition: Codable {
+    public enum ActionType: String, Codable {
+        case shortcut = "Shortcut"
+        case application = "Application"
+        case command = "Command"
+    }
+    public let type: ActionType
+    public let keyCode: UInt16?
+    public let modifiers: [String]?
+    public let bundleIdentifier: String?
+    public let commandPath: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type = "Type"
+        case keyCode = "KeyCode"
+        case modifiers = "Modifiers"
+        case bundleIdentifier = "BundleIdentifier"
+        case commandPath = "CommandPath"
+    }
+}
+
+public struct AppConfig: Codable {
+    public let triggerButtonIndex: Int64
+    public let thresholdDistance: Double
+    public let deadzoneRadius: Double
+    public let swallowTriggerEvents: Bool
+    public let clickAction: ActionDefinition?
+    public let dragLeftAction: ActionDefinition?
+    public let dragRightAction: ActionDefinition?
+    public let dragUpAction: ActionDefinition?
+    public let dragDownAction: ActionDefinition?
+
+    enum CodingKeys: String, CodingKey {
+        case triggerButtonIndex = "TriggerButtonIndex"
+        case thresholdDistance = "ThresholdDistance"
+        case deadzoneRadius = "DeadzoneRadius"
+        case swallowTriggerEvents = "SwallowTriggerEvents"
+        case clickAction = "ClickAction"
+        case dragLeftAction = "DragLeftAction"
+        case dragRightAction = "DragRightAction"
+        case dragUpAction = "DragUpAction"
+        case dragDownAction = "DragDownAction"
+    }
+}
+
+public final class ConfigManager {
+    public static let shared = ConfigManager()
+    public private(set) var activeConfig: AppConfig
+
+    private var fileMonitorSource: DispatchSourceFileSystemObject?
+    private let fileManager = FileManager.default
+
+    private var configURL: URL {
+        let home = fileManager.homeDirectoryForCurrentUser
+        let primaryPath = home.appendingPathComponent(".config/GestureDaemon/config.plist")
+        let fallbackPath = home.appendingPathComponent("Library/Application Support/GestureDaemon/config.plist")
+        if fileManager.fileExists(atPath: primaryPath.path) { return primaryPath }
+        if fileManager.fileExists(atPath: fallbackPath.path) { return fallbackPath }
+        return primaryPath
+    }
+
+    private init() {
+        self.activeConfig = ConfigManager.fallbackDefaultConfig()
+        loadConfiguration()
+        startMonitoringConfigFile()
+    }
+
+    public func loadConfiguration() {
+        let url = configURL
+        guard fileManager.fileExists(atPath: url.path) else {
+            Log.info("No config.plist found at \(url.path). Writing default template.")
+            writeDefaultConfig(to: url)
+            return
+        }
+        do {
+            let data = try Data(contentsOf: url)
+            self.activeConfig = try PropertyListDecoder().decode(AppConfig.self, from: data)
+            Log.info("Configuration loaded from: \(url.path)")
+        } catch {
+            Log.error("Failed to parse config.plist: \(error.localizedDescription). Keeping active settings.")
+        }
+    }
+
+    private func startMonitoringConfigFile() {
+        let path = configURL.path
+        let fd = open(path, O_EVTONLY)
+        guard fd != -1 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: [.delete, .write, .rename], queue: .main)
+        source.setEventHandler { [weak self] in
+            Log.info("config.plist changed. Reloading...")
+            self?.loadConfiguration()
+        }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        self.fileMonitorSource = source
+    }
+
+    private func writeDefaultConfig(to url: URL) {
+        do {
+            try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let encoder = PropertyListEncoder()
+            encoder.outputFormat = .xml
+            try encoder.encode(self.activeConfig).write(to: url, options: .atomic)
+            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            Log.info("Default config written to \(url.path) (permissions locked to 600)")
+        } catch {
+            Log.error("Failed to write default config: \(error)")
+        }
+    }
+
+    private static func fallbackDefaultConfig() -> AppConfig {
+        AppConfig(
+            triggerButtonIndex: 5, thresholdDistance: 35.0, deadzoneRadius: 8.0, swallowTriggerEvents: true,
+            clickAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
+            dragLeftAction: ActionDefinition(type: .shortcut, keyCode: 123, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
+            dragRightAction: ActionDefinition(type: .shortcut, keyCode: 124, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
+            dragUpAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
+            dragDownAction: ActionDefinition(type: .shortcut, keyCode: 125, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil)
+        )
+    }
+}
