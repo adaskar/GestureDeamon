@@ -201,9 +201,16 @@ public final class EventTapManager {
             if buttonNumber != config.triggerButtonIndex {
                 if buttonNumber == backIndex {
                     if type == .otherMouseDown {
-                        Log.info("Mouse Back button clicked (Button \(buttonNumber))")
-                        if let customAction = ConfigManager.shared.effectiveAction(for: .backButton) {
-                            ActionDispatcher.shared.dispatch(action: customAction)
+                        let frontApp = NSWorkspace.shared.frontmostApplication
+                        let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
+                        let appName = frontApp?.localizedName ?? "UNKNOWN"
+                        let pid = frontApp?.processIdentifier ?? 0
+                        let customAction = ConfigManager.shared.effectiveAction(for: .backButton)
+
+                        Log.info("🖱️ [BACK BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+[)")")
+
+                        if let action = customAction {
+                            ActionDispatcher.shared.dispatch(action: action)
                         } else {
                             ActionDispatcher.shared.dispatchNavigationBack()
                         }
@@ -211,9 +218,16 @@ public final class EventTapManager {
                     return nil // Swallow down, up, and drag for side navigation button
                 } else if buttonNumber == forwardIndex {
                     if type == .otherMouseDown {
-                        Log.info("Mouse Forward button clicked (Button \(buttonNumber))")
-                        if let customAction = ConfigManager.shared.effectiveAction(for: .forwardButton) {
-                            ActionDispatcher.shared.dispatch(action: customAction)
+                        let frontApp = NSWorkspace.shared.frontmostApplication
+                        let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
+                        let appName = frontApp?.localizedName ?? "UNKNOWN"
+                        let pid = frontApp?.processIdentifier ?? 0
+                        let customAction = ConfigManager.shared.effectiveAction(for: .forwardButton)
+
+                        Log.info("🖱️ [FORWARD BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+])")")
+
+                        if let action = customAction {
+                            ActionDispatcher.shared.dispatch(action: action)
                         } else {
                             ActionDispatcher.shared.dispatchNavigationForward()
                         }

@@ -141,6 +141,9 @@ public final class ActionDispatcher {
     }
 
     private func sendSyntheticShortcut(keyCode: CGKeyCode, modifiers: [String]) {
+        let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "UNKNOWN"
+        Log.info("⚡ [SYNTHETIC SHORTCUT] Injecting keyCode=\(keyCode), modifiers=\(modifiers), targetApp='\(frontApp)' into cghidEventTap")
+
         let loc = CGEventTapLocation.cghidEventTap
         let source = CGEventSource(stateID: .hidSystemState)
 

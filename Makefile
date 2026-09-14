@@ -46,14 +46,21 @@ dmg: app
 	@./scripts/create_dmg.sh
 
 run: app
+	@pkill -9 -x $(TARGET) 2>/dev/null || true
+	@sleep 0.5
 	@echo "==> Launching $(APP_NAME)..."
 	open $(APP_BUNDLE)
 
 diagnose: app
+	@pkill -9 -x $(TARGET) 2>/dev/null || true
+	@sleep 0.5
 	@echo "==> Diagnostic mode. Ctrl+C to exit."
 	$(APP_BUNDLE)/Contents/MacOS/$(TARGET) --diagnostics
 
 install: app
+	@echo "==> Terminating any running GestureDaemon..."
+	@pkill -9 -x $(TARGET) 2>/dev/null || true
+	@sleep 0.5
 	@echo "==> Installing $(APP_NAME) to /Applications..."
 	@rm -rf /Applications/$(APP_NAME)
 	@cp -R $(APP_BUNDLE) /Applications/
