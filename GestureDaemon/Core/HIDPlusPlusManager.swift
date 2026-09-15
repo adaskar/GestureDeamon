@@ -175,28 +175,36 @@ public final class HIDPlusPlusManager {
         Log.info("☀️ System woke from sleep. Re-synchronizing HID++ hardware...")
         self.isGestureButtonPressed = false
 
-        // 1. Immediate hardware diversion sync
-        reapplyHardwareDiversion()
+        // 1. Immediately restart matching to flush any stale IOHID handles
+        restartMatching()
 
-        // 2. Staged retries at +1.0s and +2.5s to account for Bluetooth link re-establishment
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            Log.info("☀️ Wake stage 1 (+1.0s): Verifying HID++ hardware connection...")
-            self?.reapplyHardwareDiversion()
+        // 2. Staged retries at +1.5s and +3.0s to account for Bluetooth link re-establishment
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self = self else { return }
+            Log.info("☀️ Wake stage 1 (+1.5s): Verifying HID++ device connection...")
+            if self.activeDevice == nil || !self.isDeviceOpen {
+                self.restartMatching()
+            } else {
+                self.reapplyHardwareDiversion()
+            }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            Log.info("☀️ Wake stage 2 (+2.5s): Confirming HID++ diversion...")
-            self?.reapplyHardwareDiversion()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            guard let self = self else { return }
+            Log.info("☀️ Wake stage 2 (+3.0s): Confirming HID++ diversion...")
+            if self.activeDevice == nil || !self.isDeviceOpen {
+                self.restartMatching()
+            } else {
+                self.reapplyHardwareDiversion()
+            }
         }
     }
 
     public func reapplyHardwareDiversion() {
         self.isGestureButtonPressed = false
         guard let device = self.activeDevice, self.isDeviceOpen else {
-            Log.info("No active open device found on wake. Re-checking HID Manager...")
-            if self.activeDevice == nil {
-                restartMatching()
-            }
+            Log.info("No active open device found. Re-checking HID Manager...")
+            restartMatching()
             return
         }
 
@@ -250,7 +258,12 @@ public final class HIDPlusPlusManager {
 
         let status = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0x11, report, report.count)
         if status != kIOReturnSuccess {
-            Log.error("Failed to query HID++ feature 0x\(String(featureId, radix: 16)) (status: \(status))")
+            Log.error("Failed to query HID++ feature 0x\(String(featureId, radix: 16)) (status: \(status)). Connection may be stale.")
+            self.isDeviceOpen = false
+            self.activeDevice = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.restartMatching()
+            }
         }
     }
 
@@ -309,7 +322,12 @@ public final class HIDPlusPlusManager {
         if status == kIOReturnSuccess {
             Log.info("Diverted button CID 0x\(String(format: "%04X", cid)) for gestures over HID++.")
         } else {
-            Log.error("Failed to divert button CID 0x\(String(format: "%04X", cid)) (status: \(status))")
+            Log.error("Failed to divert button CID 0x\(String(format: "%04X", cid)) (status: \(status)). Connection may be stale.")
+            self.isDeviceOpen = false
+            self.activeDevice = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.restartMatching()
+            }
         }
     }
 

@@ -182,6 +182,10 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         if let button = statusItem?.button {
             button.appearsDisabled = isPaused
         }
+        if !isPaused {
+            EventTapManager.shared.ensureTapActive()
+            HIDPlusPlusManager.shared.handleWake()
+        }
         Log.info(isPaused ? "Gestures paused from menu bar." : "Gestures resumed from menu bar.")
     }
 
