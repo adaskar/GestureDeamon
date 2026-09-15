@@ -179,6 +179,9 @@ public final class EventTapManager {
         case .flagsChanged:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
             if stateMachine.isEngaged && (keycode == 55 || keycode == 58 || keycode == 0) {
+                if !event.flags.contains(.maskCommand) && !event.flags.contains(.maskAlternate) {
+                    EventTapManager.forceReleaseModifiers()
+                }
                 return nil // SWALLOW modifier changes while magic gesture window is active
             }
         default:
@@ -280,11 +283,25 @@ public final class EventTapManager {
         return nil // Swallow movement while gesture is engaged so cursor stays in place
     }
 
-    private func clearSystemModifiers() {
-        if let clearEvent = CGEvent(source: nil) {
+    public static func forceReleaseModifiers() {
+        let source = CGEventSource(stateID: .hidSystemState)
+        // Explicitly clear key-up flagsChanged for Cmd, Opt, Ctrl, Shift (left & right)
+        let modifierKeys: [CGKeyCode] = [55, 58, 59, 56, 54, 61, 62, 60]
+        for key in modifierKeys {
+            if let ev = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) {
+                ev.type = .flagsChanged
+                ev.flags = []
+                ev.post(tap: .cghidEventTap)
+            }
+        }
+        if let clearEvent = CGEvent(source: source) {
             clearEvent.type = .flagsChanged
             clearEvent.flags = []
             clearEvent.post(tap: .cghidEventTap)
         }
+    }
+
+    private func clearSystemModifiers() {
+        EventTapManager.forceReleaseModifiers()
     }
 }
