@@ -76,7 +76,9 @@ public final class GestureStateMachine {
             isTriggerEngaged = false
             onEngagementChanged?(false)
             executeDirectionalAction(resolveDirection(dx: accumulatedDeltaX, dy: accumulatedDeltaY))
-            EventTapManager.forceReleaseModifiers()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+                EventTapManager.forceReleaseModifiers()
+            }
         }
         return config.swallowTriggerEvents
     }

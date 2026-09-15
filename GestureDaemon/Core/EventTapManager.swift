@@ -285,19 +285,14 @@ public final class EventTapManager {
 
     public static func forceReleaseModifiers() {
         let source = CGEventSource(stateID: .hidSystemState)
-        // Explicitly clear key-up flagsChanged for Cmd, Opt, Ctrl, Shift (left & right)
-        let modifierKeys: [CGKeyCode] = [55, 58, 59, 56, 54, 61, 62, 60]
+        // Explicitly clear key-up flagsChanged ONLY for Command & Option (Logitech thumb macro keys)
+        let modifierKeys: [CGKeyCode] = [55, 58] // Left Command, Left Option
         for key in modifierKeys {
             if let ev = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) {
                 ev.type = .flagsChanged
                 ev.flags = []
                 ev.post(tap: .cghidEventTap)
             }
-        }
-        if let clearEvent = CGEvent(source: source) {
-            clearEvent.type = .flagsChanged
-            clearEvent.flags = []
-            clearEvent.post(tap: .cghidEventTap)
         }
     }
 

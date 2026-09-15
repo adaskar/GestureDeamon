@@ -137,12 +137,6 @@ public final class ActionDispatcher {
         // Post to .cgSessionEventTap so WindowServer / Dock intercepts it as a session hotkey
         down.post(tap: .cgSessionEventTap)
         up.post(tap: .cgSessionEventTap)
-
-        // Clear session flags so hotkey modifiers (Control / SecondaryFn) do not linger
-        if let clearSession = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(vKey), keyDown: false) {
-            clearSession.flags = []
-            clearSession.post(tap: .cgSessionEventTap)
-        }
         return true
     }
 
