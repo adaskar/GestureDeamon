@@ -27,9 +27,10 @@ public enum Log {
         }
     }
 
+    private static let isoFormatter = ISO8601DateFormatter()
+
     private static func timestamp() -> String {
-        let formatter = ISO8601DateFormatter()
-        return formatter.string(from: Date())
+        return isoFormatter.string(from: Date())
     }
 
     public static func info(_ message: String) {
@@ -46,8 +47,8 @@ public enum Log {
         logger.debug("\(message, privacy: .public)")
         #if DEBUG
         print("[DEBUG] \(message)")
-        #endif
         writeToFile("[\(timestamp())] [DEBUG] \(message)")
+        #endif
     }
 }
 

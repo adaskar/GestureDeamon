@@ -99,7 +99,6 @@ public struct AppConfig: Codable {
 public final class ConfigManager {
     public static let shared = ConfigManager()
     public private(set) var activeConfig: AppConfig
-    public private(set) var activeBundleIdentifier: String?
 
     private var fileMonitorSource: DispatchSourceFileSystemObject?
     private let fileManager = FileManager.default
@@ -115,27 +114,12 @@ public final class ConfigManager {
 
     private init() {
         self.activeConfig = ConfigManager.fallbackDefaultConfig()
-        self.activeBundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        startObservingFrontmostApplication()
         loadConfiguration()
         startMonitoringConfigFile()
     }
 
-    private func startObservingFrontmostApplication() {
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  let bundleId = app.bundleIdentifier else { return }
-            self?.activeBundleIdentifier = bundleId
-            Log.debug("Frontmost application switched to: \(bundleId)")
-        }
-    }
-
     public func effectiveAction(for slot: ActionSlot) -> ActionDefinition? {
-        let currentBundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? activeBundleIdentifier
+        let currentBundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
 
         if let bundle = currentBundle {
             var profile = activeConfig.applications?[bundle]
