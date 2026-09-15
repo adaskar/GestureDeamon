@@ -112,6 +112,21 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
 - **Hardware Button Diversion**: Automatically issues `setCidReporting` for Logitech gesture controls (CID `0x00C3` Gesture Button, `0x00D0`, and `0x01A0`), instructing the firmware to divert clicks directly into `GestureDaemon` instead of emitting OS fallback macros.
 - **Permission Management**: Direct Bluetooth composite HID access requires macOS **Input Monitoring** permissions (`IOHIDCheckAccess`). `PermissionHelper` checks and prompts for Input Monitoring alongside Accessibility, displaying real-time status and single-click recovery directly in the menu bar.
 
+### L. Sleep / Wake & Power Resilience Engine
+- **The Challenge**: When macOS enters display sleep, system sleep, or screen lock, CoreGraphics automatically disables user-space event taps (`kCGEventTapDisabledByUserInput`). Simultaneously, Bluetooth Low Energy peripherals power-cycle their microcontrollers, resetting internal firmware memory (Feature `0x1B04` `REPROG_CONTROLS_V4`) back to un-diverted factory defaults.
+- **Dedicated Power Manager (`SleepWakeManager`)**:
+  - Implements closure block observers on `NSWorkspace.shared.notificationCenter` for `willSleepNotification`, `didWakeNotification`, `screensDidSleepNotification`, `screensDidWakeNotification`, `sessionDidResignActiveNotification`, and `sessionDidBecomeActiveNotification`.
+  - Coordinates clean suspension before sleep (clearing modifiers, cancelling in-flight timers, resetting gesture state machines).
+- **Automated Event Tap Self-Healing**:
+  - `EventTapManager` intercepts both `tapDisabledByTimeout` and `tapDisabledByUserInput`, automatically re-enabling `CGEventTap` without requiring app restart.
+  - Implements `ensureTapActive()` health checks on wake and resume.
+- **Staged Bluetooth Re-Diversion**:
+  - On wake, `HIDPlusPlusManager` discards stale IOHID handles and restarts device matching.
+  - Executes staged re-diversion passes at **+1.5s** and **+3.0s** to seamlessly re-apply `setCidReporting` once the Bluetooth radio link completes its OS handshake.
+  - Hardware transmission errors automatically trigger stale-handle recovery.
+- **Menu Bar Resume Sync**:
+  - Toggling "Resume Gestures" in the menu bar executes an explicit health check and hardware re-initialization.
+
 ---
 
 ## 2. Complete Configuration Guide (config.plist)
