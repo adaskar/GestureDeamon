@@ -9,7 +9,7 @@
     <key>DeadzoneRadius</key>
     <real>8.0</real>
     <key>GestureWindowMs</key>
-    <real>200.0</real>
+    <real>50.0</real>
     <key>ShowMenuBarIcon</key>
     <true/>
     <key>SwallowTriggerEvents</key>
@@ -79,36 +79,6 @@
                 <key>KeyCode</key><integer>24</integer>
                 <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
                 <key>Comment</key><string>VS Code Navigate Forward (Ctrl+Shift+- / code: Equal)</string>
-            </dict>
-        </dict>
-        <key>com.visualstudio.code.oss</key>
-        <dict>
-            <key>BackButtonAction</key>
-            <dict>
-                <key>Type</key><string>Shortcut</string>
-                <key>KeyCode</key><integer>24</integer>
-                <key>Modifiers</key><array><string>Control</string></array>
-            </dict>
-            <key>ForwardButtonAction</key>
-            <dict>
-                <key>Type</key><string>Shortcut</string>
-                <key>KeyCode</key><integer>24</integer>
-                <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
-            </dict>
-        </dict>
-        <key>com.vscodium</key>
-        <dict>
-            <key>BackButtonAction</key>
-            <dict>
-                <key>Type</key><string>Shortcut</string>
-                <key>KeyCode</key><integer>24</integer>
-                <key>Modifiers</key><array><string>Control</string></array>
-            </dict>
-            <key>ForwardButtonAction</key>
-            <dict>
-                <key>Type</key><string>Shortcut</string>
-                <key>KeyCode</key><integer>24</integer>
-                <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
             </dict>
         </dict>
     </dict>
