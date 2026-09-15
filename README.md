@@ -40,6 +40,7 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 - 📱 **Per-Application Contextual Profiles**: Dynamically override gestures and button bindings based on the active foreground application (e.g. scrub timelines in video editors, navigate history in browsers, toggle terminal in IDEs).
 - 🎛 **Live Hot-Reloading (`config.plist`)**: Edit your configuration in `~/.config/GestureDaemon/config.plist` and changes take effect immediately without restarting.
 - 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), "Hide Menu Bar Icon" mode with single-instance reopen recovery, and modern `SMAppService` launch-at-login integration.
+- 📡 **Dual-Transport HID++ (USB & Direct Bluetooth LE)**: Seamlessly detects and controls Logitech mice over USB Unifying/Bolt receivers (`0xFF00`) or direct **Bluetooth Low Energy** connections (`0xFF43:0x0202`), automatically diverting the thumb button (CID `0x00C3`) with zero setup.
 - 🪵 **Built-in Diagnostic Logging**: Real-time event tracking and live logging at `~/.config/GestureDaemon/daemon.log` for easy troubleshooting.
 
 ---

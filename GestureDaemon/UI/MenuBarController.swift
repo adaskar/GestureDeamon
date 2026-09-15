@@ -81,6 +81,18 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         statusItemHeader.isEnabled = false
         menu.addItem(statusItemHeader)
 
+        // Connected Device Info
+        if let devName = HIDPlusPlusManager.shared.connectedDeviceName,
+           let transport = HIDPlusPlusManager.shared.connectedTransport {
+            let devItem = NSMenuItem(title: "🖱️ \(devName) (\(transport.rawValue))", action: nil, keyEquivalent: "")
+            devItem.isEnabled = false
+            menu.addItem(devItem)
+        } else {
+            let devItem = NSMenuItem(title: "🖱️ Scanning for Logitech Hardware...", action: nil, keyEquivalent: "")
+            devItem.isEnabled = false
+            menu.addItem(devItem)
+        }
+
         menu.addItem(NSMenuItem.separator())
 
         // Show/Hide Menu Bar Icon Options
@@ -117,11 +129,19 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         configItem.target = self
         menu.addItem(configItem)
 
-        // Check Permissions
-        let permTitle = AccessibilityHelper.verifyAccessibility(prompt: false) ? "Accessibility: Granted" : "Accessibility: Not Granted..."
-        let permItem = NSMenuItem(title: permTitle, action: #selector(checkPermissions), keyEquivalent: "")
-        permItem.target = self
-        menu.addItem(permItem)
+        // Accessibility Permission
+        let axGranted = PermissionHelper.isAccessibilityGranted
+        let axTitle = axGranted ? "Accessibility: Granted" : "⚠️ Accessibility: Missing (Authorize)"
+        let axItem = NSMenuItem(title: axTitle, action: #selector(checkAccessibility), keyEquivalent: "")
+        axItem.target = self
+        menu.addItem(axItem)
+
+        // Input Monitoring Permission (Crucial for Bluetooth LE)
+        let imGranted = PermissionHelper.isInputMonitoringGranted
+        let imTitle = imGranted ? "Input Monitoring: Granted" : "⚠️ Input Monitoring: Missing (Authorize for BLE)"
+        let imItem = NSMenuItem(title: imTitle, action: #selector(checkInputMonitoring), keyEquivalent: "")
+        imItem.target = self
+        menu.addItem(imItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -179,9 +199,19 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         NSWorkspace.shared.open(primaryPath)
     }
 
-    @objc private func checkPermissions() {
-        if !AccessibilityHelper.verifyAccessibility(prompt: true) {
+    @objc private func checkAccessibility() {
+        if !PermissionHelper.isAccessibilityGranted {
+            _ = PermissionHelper.requestAccessibility()
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    @objc private func checkInputMonitoring() {
+        if !PermissionHelper.isInputMonitoringGranted {
+            _ = PermissionHelper.requestInputMonitoring()
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
                 NSWorkspace.shared.open(url)
             }
         }

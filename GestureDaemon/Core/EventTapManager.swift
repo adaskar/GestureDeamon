@@ -29,6 +29,16 @@ public final class EventTapManager {
         self.diagnosticMode = enabled
     }
 
+    public func handleHIDPlusPlusGesture(pressed: Bool) {
+        if isPaused { return }
+        if pressed {
+            let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 75.0
+            _ = stateMachine.handleMagicDown(windowDurationMs: windowMs)
+        } else {
+            _ = stateMachine.handleMagicUp()
+        }
+    }
+
     public func setMotionTrackingEnabled(_ enabled: Bool) {
         if enabled {
             startMotionTap()
@@ -149,9 +159,11 @@ public final class EventTapManager {
             case .otherMouseDown, .otherMouseUp, .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp:
                 let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
                 print("[DIAGNOSTIC] Mouse Event: type=\(type.rawValue), buttonNumber=\(buttonNumber)")
+                fflush(stdout)
             case .keyDown, .keyUp:
                 let keycode = event.getIntegerValueField(.keyboardEventKeycode)
                 print("[DIAGNOSTIC] Keyboard Event: type=\(type.rawValue), keyCode=\(keycode), flags=0x\(String(event.flags.rawValue, radix: 16))")
+                fflush(stdout)
             case .flagsChanged:
                 let keycode = event.getIntegerValueField(.keyboardEventKeycode)
                 let isCmd = event.flags.contains(.maskCommand)
@@ -159,6 +171,7 @@ public final class EventTapManager {
                 let isAlt = event.flags.contains(.maskAlternate)
                 let isShift = event.flags.contains(.maskShift)
                 print("[DIAGNOSTIC] Flags Changed: keyCode=\(keycode), flags=0x\(String(event.flags.rawValue, radix: 16)) (Cmd:\(isCmd) Ctrl:\(isCtrl) Alt:\(isAlt) Shift:\(isShift))")
+                fflush(stdout)
             default:
                 break
             }

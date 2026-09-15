@@ -46,6 +46,19 @@ public final class GestureStateMachine {
     }
 
     public func handleMagicUp() -> Bool {
+        guard isTriggerEngaged else { return true }
+        magicGestureTimer?.cancel()
+        magicGestureTimer = nil
+        if !gestureConsumed {
+            Log.info("Click detected on magic thumb button (released)")
+            let action = ConfigManager.shared.effectiveAction(for: .click)
+            ActionDispatcher.shared.dispatch(action: action)
+        }
+        isTriggerEngaged = false
+        accumulatedDeltaX = 0.0
+        accumulatedDeltaY = 0.0
+        gestureConsumed = false
+        onEngagementChanged?(false)
         return true
     }
 

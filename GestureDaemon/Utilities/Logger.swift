@@ -61,6 +61,7 @@ public enum Log {
         guard isEnabled && currentLevel >= .info else { return }
         logger.info("\(message, privacy: .public)")
         print("[INFO] \(message)")
+        fflush(stdout)
         writeToFile("[\(timestamp())] [INFO] \(message)")
     }
 
@@ -68,6 +69,7 @@ public enum Log {
         guard isEnabled && currentLevel >= .error else { return }
         logger.error("\(message, privacy: .public)")
         print("[ERROR] \(message)")
+        fflush(stdout)
         writeToFile("[\(timestamp())] [ERROR] \(message)")
     }
 
@@ -75,6 +77,7 @@ public enum Log {
         guard isEnabled && currentLevel >= .debug else { return }
         logger.debug("\(message, privacy: .public)")
         print("[DEBUG] \(message)")
+        fflush(stdout)
         writeToFile("[\(timestamp())] [DEBUG] \(message)")
     }
 }

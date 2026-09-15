@@ -14,9 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MenuBarController.shared.handleAppReopen()
         }
 
-        if !AccessibilityHelper.verifyAccessibility(prompt: true) {
-            Log.error("Accessibility permission missing. System prompt shown.")
-        }
+        PermissionHelper.verifyAndPrompt()
 
         AccessibilityHelper.pollForAccess {
             Log.info("Accessibility granted. Starting event taps and hardware drivers...")
@@ -65,12 +63,10 @@ if isDiagnostics {
 
     _ = ConfigManager.shared
 
-    if !AccessibilityHelper.verifyAccessibility(prompt: true) {
-        Log.error("Accessibility permission missing. System prompt shown.")
-    }
+    PermissionHelper.verifyAndPrompt()
 
     AccessibilityHelper.pollForAccess {
-        Log.info("Starting EventTap...")
+        Log.info("Starting EventTap and HID++ Manager...")
         EventTapManager.shared.start()
         HIDPlusPlusManager.shared.start()
     }

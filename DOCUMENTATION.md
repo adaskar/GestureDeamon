@@ -19,6 +19,7 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
    - [Universal Side Navigation Buttons & Low-Level HID Injection](#h-universal-side-navigation-buttons--low-level-hid-injection)
    - [Per-Application Contextual Profiles](#i-per-application-contextual-profiles)
    - [Real-Time File Logging (daemon.log)](#j-real-time-file-logging-daemonlog)
+   - [Direct Bluetooth LE HID++ Hardware Engine](#k-direct-bluetooth-le-hid-hardware-engine)
 2. [Complete Configuration Guide (config.plist)](#2-complete-configuration-guide-configplist)
    - [Configuration Locations & Priority](#configuration-locations--priority)
    - [Live Hot-Reloading](#live-hot-reloading)
@@ -103,6 +104,13 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
 - Supports granular log levels: `"Debug"`, `"Info"`, `"Error"`, and `"None"`.
 - When enabled, logs button presses, frontmost application detections, resolved actions, and gesture states to `~/.config/GestureDaemon/daemon.log` (`tail -f ~/.config/GestureDaemon/daemon.log`).
 - Running interactive hardware diagnostics (`make diagnose` or `--diagnostics`) automatically forces active debug logging regardless of config settings.
+
+### K. Direct Bluetooth LE HID++ Hardware Engine
+- **Dual-Transport Auto-Detection**: `HIDPlusPlusManager` seamlessly interfaces with both USB Unifying/Bolt receivers (`VendorID: 0x046d`, `UsagePage: 0xff00`) and direct **Bluetooth Low Energy** connections (`UsagePage: 0xff43`, `Usage: 0x0202`).
+- **HID++ 2.0 Long-Report Framing (`0x11`)**: Direct BLE links require 20-byte Long Reports addressed to device index `0xFF`. The engine formats, pads, and dispatches HID++ 2.0 commands accordingly.
+- **Dynamic Feature Discovery (IRoot `0x0000`)**: Queries the device at connection time to resolve the runtime feature index for `0x1B04` (`REPROG_CONTROLS_V4`).
+- **Hardware Button Diversion**: Automatically issues `setCidReporting` for Logitech gesture controls (CID `0x00C3` Gesture Button, `0x00D0`, and `0x01A0`), instructing the firmware to divert clicks directly into `GestureDaemon` instead of emitting OS fallback macros.
+- **Permission Management**: Direct Bluetooth composite HID access requires macOS **Input Monitoring** permissions (`IOHIDCheckAccess`). `PermissionHelper` checks and prompts for Input Monitoring alongside Accessibility, displaying real-time status and single-click recovery directly in the menu bar.
 
 ---
 
@@ -543,13 +551,9 @@ Add this to your `~/.config/GestureDaemon/config.plist`:
 
 ## 3. Future Roadmap (What We Can Do Next)
 
-While GestureDaemon currently provides full feature parity with Logitech Options+ gesture switching without the battery and CPU penalties, here are the most impactful capabilities on our roadmap:
+While GestureDaemon now provides full dual-transport (USB Unifying/Bolt & direct Bluetooth Low Energy) HID++ hardware button diversion and gesture switching without the battery and CPU penalties, here are the next capabilities on our roadmap:
 
-### 1. Direct Bluetooth LE HID++ Support
-- **Current State**: `HIDPlusPlusManager` currently listens via `IOHIDManager` for USB receivers (Vendor ID `0x046d`, Usage Page `0xFF00`). When connected over Bluetooth, Logitech mice default to standard HID descriptor emulation and send the thumb button via the fallback keyboard macro (`Cmd+Option+Tab`).
-- **Improvement**: Implement direct Bluetooth HID++ parsing using `IOBluetooth` / `CoreBluetooth` or custom L2CAP channel listening. This would allow reading battery levels, setting DPI on the fly, and toggling SmartShift ratchet mode directly over Bluetooth without requiring a USB Unifying/Bolt receiver.
-
-### 2. Diagonal & 8-Way Gesture Recognition
+### 1. Diagonal & 8-Way Gesture Recognition
 - **Concept**: Expand from 4 cardinal directions (Left, Right, Up, Down) to 8 directions by evaluating the angle $\theta = \operatorname{atan2}(\Delta y, \Delta x)$:
   - `DragUpLeftAction`
   - `DragUpRightAction`
@@ -557,20 +561,20 @@ While GestureDaemon currently provides full feature parity with Logitech Options
   - `DragDownRightAction`
 - Gives power users 8 distinct gesture actions on a single thumb button.
 
-### 3. Haptic Feedback Integration
+### 2. Haptic Feedback Integration
 - **Concept**: Provide physical sensory confirmation when a gesture threshold is reached.
 - **Implementation**:
   - For MacBook users, trigger the trackpad's Force Touch Taptic Engine using `NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)`.
   - For supported mice with internal haptic actuators (e.g. MX Master 4), send the HID++ 2.0 haptic pulse command over the receiver report pipe when `distance >= ThresholdDistance`.
 
-### 4. SwiftUI Native Preferences Window
+### 3. SwiftUI Native Preferences Window
 - **Concept**: A modern, clean settings window accessed from the menu bar ("Preferences...") for users who prefer visual configuration over raw plist editing.
 - **Architecture**:
   - Built with pure SwiftUI (`Settings` or `NSWindowController`).
   - Reads and writes to the existing `config.plist` model, maintaining full compatibility with the CLI and live file watcher.
   - Interactive keycode recorder and button tester.
 
-### 5. Developer ID Signing & Notarization Pipeline
+### 4. Developer ID Signing & Notarization Pipeline
 - **Concept**: Prepare the application for public distribution outside local machines without triggering macOS Gatekeeper warnings.
 - **Implementation**:
   - Add `notarize` target to `Makefile` using `xcrun notarytool submit build/GestureDaemon.dmg --keychain-profile ... --wait`.
