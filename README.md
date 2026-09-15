@@ -1,81 +1,222 @@
-# GestureDaemon
+# GestureDaemon 🪟🖱️
+
+[![macOS](https://img.shields.io/badge/macOS-13.0%2B-black?style=flat-square&logo=apple)](https://www.apple.com/macos/)
+[![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange?style=flat-square&logo=swift)](https://developer.apple.com/swift/)
+[![Architecture](https://img.shields.io/badge/Architecture-Universal%20(Apple%20Silicon%20%2B%20Intel)-blue?style=flat-square)](https://developer.apple.com)
+[![CPU Usage](https://img.shields.io/badge/Idle%20CPU-0.0%25-brightgreen?style=flat-square)](https://github.com)
+[![Dependencies](https://img.shields.io/badge/Dependencies-Zero-success?style=flat-square)](https://github.com)
+[![License](https://img.shields.io/badge/License-MIT-purple?style=flat-square)](LICENSE)
 
 > **Ultra-lightweight, zero-telemetry native macOS background daemon and menu bar utility replacing Logitech Options+ for multi-button mice.**
 
-Built in pure Swift with zero third-party dependencies. Consumes **0.0% idle CPU** and less than 15 MB RAM while delivering native, instant Mission Control and Desktop Spaces gesture transitions.
+Built in 100% pure Swift with **zero external dependencies**. Consumes **0.0% idle CPU** and less than 15 MB of RAM while delivering instant, sub-millisecond Mission Control, App Exposé, Spaces navigation, and universal side-button history controls.
 
 ---
 
-## Highlights
+## 💡 Why GestureDaemon?
+
+Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-gigabyte Electron runtimes, background analytics daemons, network telemetry agents, and consume significant CPU and battery life just to intercept a couple of thumb buttons.
+
+**GestureDaemon** replaces the entire bloatware stack with a tiny, standalone native binary (~2 MB):
+
+| Metric | Logitech Options+ | GestureDaemon |
+|---|---|---|
+| **Idle CPU Usage** | 1% – 5% (constant wakeups) | **0.0%** (zero IPC wakeups) |
+| **Memory Footprint** | 300 MB – 800 MB+ | **< 15 MB** |
+| **Dependencies / Runtimes** | Node.js, Electron, Python, Crashpad | **Zero** (Pure Swift & Apple SPI) |
+| **Network Telemetry** | Active tracking & analytics | **100% Offline & Private** |
+| **Configuration** | Heavy cloud-synced GUI | Clean XML/Plist with **Live Hot-Reloading** |
+| **Space Transitions** | Emulated keys (frequent escape codes) | Native WindowServer Symbolic HotKeys |
+
+---
+
+## ✨ Features
 
 - ⚡️ **True 0.0% Idle CPU**: Ephemeral event-tap lifecycle guarantees zero IPC wakeups and zero context switches during normal mouse and trackpad pointer motion.
-- 🪟 **Native macOS Desktop Switching**: Ported reverse-engineered CoreGraphics Services (CGS) SPI with `NX_SECONDARYFNMASK` modifier injection for flawless Spaces transitions.
-- 🎯 **Mission Control & App Exposé**: Instant Exposé triggers via private `CoreDockSendNotification`.
-- 🧼 **Modifier Sanitization**: Unconditionally swallows Logitech's hardware fallback `Cmd+Option+Tab` thumb macro and clears modifier flags—preventing VS Code or browser tab bars from stealing focus.
-- 🧭 **Universal Side Button Navigation (Back & Forward)**: Intercepts thumb side buttons (Buttons 3 & 4) and translates them into instant history navigation (`Cmd+[` / `Cmd+]`) across Safari, Chrome, Finder, and smart code navigation (`Ctrl+-` / `Ctrl+Shift+-`) in VS Code.
-- 📱 **Per-Application Contextual Profiles**: Override any gesture or button mapping for specific apps (e.g. Safari tab navigation, VS Code terminal toggle) with automatic frontmost detection and global fallback.
-- 🎛 **Customizable `config.plist` with Live Hot-Reloading**: Edit settings in `~/.config/GestureDaemon/config.plist` and changes apply immediately without restarting.
-- 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), "Hide Menu Bar Icon" support with headless reopen recovery, and modern `SMAppService` launch-at-login integration.
-- 📦 **Standard DMG Packaging**: Automated `make dmg` drag-and-drop installer.
+- 🪟 **Fluid Spaces & Mission Control Transitions**: Uses reverse-engineered Apple CoreGraphics Services (CGS) SPI with `NX_SECONDARYFNMASK` modifier injection for flawless native Desktop switching.
+- 🎯 **Native Dock Integration**: Instant Mission Control and App Exposé via private `CoreDockSendNotification`.
+- 🧼 **Modifier Sanitization**: Unconditionally swallows Logitech's hardware fallback `Cmd+Option+Tab` thumb macro and flushes system modifiers—preventing VS Code or browser tab bars from stealing focus.
+- 🧭 **Universal Side Navigation (Back & Forward)**: Translates side buttons (Buttons 3 & 4) into instant history navigation (`Cmd+[` / `Cmd+]`) across Safari, Chrome, and Finder, with smart IDE navigation (`Ctrl+-` / `Ctrl+Shift+-`) in Visual Studio Code.
+- 📱 **Per-Application Contextual Profiles**: Dynamically override gestures and button bindings based on the active foreground application (e.g. scrub timelines in video editors, navigate history in browsers, toggle terminal in IDEs).
+- 🎛 **Live Hot-Reloading (`config.plist`)**: Edit your configuration in `~/.config/GestureDaemon/config.plist` and changes take effect immediately without restarting.
+- 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), "Hide Menu Bar Icon" mode with single-instance reopen recovery, and modern `SMAppService` launch-at-login integration.
+- 🪵 **Built-in Diagnostic Logging**: Real-time event tracking and live logging at `~/.config/GestureDaemon/daemon.log` for easy troubleshooting.
 
 ---
 
-## Quick Installation
+## 🚀 Installation
 
-### From Pre-Built DMG
-1. Download or build `GestureDaemon.dmg`.
-2. Open the disk image and drag **GestureDaemon** into `/Applications`.
-3. Launch **GestureDaemon** from Applications or Spotlight.
-4. When prompted, enable Accessibility in **System Settings → Privacy & Security → Accessibility**.
+### Option 1: Drag-and-Drop Disk Image (Recommended)
 
-### From Source
+1. Download the latest release: **`GestureDaemon.dmg`**.
+2. Double-click the DMG and drag **GestureDaemon.app** into your `/Applications` folder.
+3. Open **GestureDaemon** from Applications or Spotlight.
+4. When prompted, grant Accessibility in **System Settings → Privacy & Security → Accessibility**.
+5. Click the menu bar icon to toggle **Launch at Login**.
+
+### Option 2: Build From Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/guru/GestureDaemon.git
 cd GestureDaemon
 
-# Build universal application bundle and DMG
-make all
+# Build universal fat binary (arm64 + x86_64) and pack app bundle
+make app
 
-# Install directly to /Applications
+# Install directly to /Applications and launch
 make install
+```
+
+To create a distributable disk image:
+```bash
+make dmg
+# Result: build/GestureDaemon.dmg
 ```
 
 ---
 
-## Default Controls & Gestures (Logitech M720 / MX Master)
+## 🎮 Default Controls & Gestures
 
-### Gestures (Thumb Button / Rest)
-Hold the **Thumb Gesture Button** (or flick your wrist) and release:
+Optimized out-of-the-box for multi-button mice including the **Logitech M720 Triathlon**, **MX Master 2S / 3 / 3S**, and standard 5-button mice:
 
-| Gesture | Action | Implementation |
+### 1. Thumb Button Gestures (Hold & Flick)
+
+Hold the **Thumb Gesture Button** (or wrist-flick) and release:
+
+```
+                    ▲
+             [ Mission Control ]
+                    |
+[ Space Right ] ◀── ● ──▶ [ Space Left ]
+  (Drag Left)       |     (Drag Right)
+                    ▼
+              [ App Exposé ]
+```
+
+| Gesture Motion | Default Action | Technical Implementation |
 |---|---|---|
-| **Stationary Click** | Mission Control | `CoreDockSendNotification("com.apple.expose.awake")` |
-| **Flick Left** | Switch to Right Desktop | CGS Symbolic HotKey `81` (`Ctrl + Right`) |
-| **Flick Right** | Switch to Left Desktop | CGS Symbolic HotKey `79` (`Ctrl + Left`) |
-| **Flick Down** | App Exposé | `CoreDockSendNotification("com.apple.expose.front.awake")` |
+| **Stationary Tap / Click** | **Mission Control** | `CoreDockSendNotification("com.apple.expose.awake")` |
+| **Wrist-Flick Left** | **Switch to Right Space** | CGS Symbolic HotKey `81` (`Ctrl + Right`) |
+| **Wrist-Flick Right** | **Switch to Left Space** | CGS Symbolic HotKey `79` (`Ctrl + Left`) |
+| **Wrist-Flick Down** | **App Exposé** | `CoreDockSendNotification("com.apple.expose.front.awake")` |
 
-*Evaluation Window: 200 ms. Threshold: 35 pt. Deadzone: 8 pt.*
+*Timing: 200 ms evaluation window. Threshold: 35 pt. Deadzone: 8 pt.*
 
-### Side Navigation Buttons
-| Physical Button | Button Index | Default Action | Supported Contexts |
-|---|---|---|---|
-| **Back Button** | `3` | Navigate Back | Safari, Chrome, Finder (`Cmd + [`), VS Code (`Ctrl + -`) |
-| **Forward Button** | `4` | Navigate Forward | Safari, Chrome, Finder (`Cmd + ]`), VS Code (`Ctrl + Shift + -`) |
+### 2. Side Navigation Buttons
 
-*Configurable via `BackButtonAction` and `ForwardButtonAction` in `config.plist`.*
-
----
-
-## Full Documentation
-
-For deep technical details, parameter dictionaries, keycode reference tables, pre-made configuration recipes (developer, media, web browsing), and our future feature roadmap, see:
-
-📖 **[Full Architecture, Configuration Guide & Roadmap (DOCUMENTATION.md)](DOCUMENTATION.md)**
+| Physical Button | Button Index | Default Target Action |
+|---|---|---|
+| **Back Button** | `3` | **Navigate Back**: Browser / Finder (`Cmd + [`), VS Code (`Ctrl + -`) |
+| **Forward Button** | `4` | **Navigate Forward**: Browser / Finder (`Cmd + ]`), VS Code (`Ctrl + Shift + -`) |
 
 ---
 
-## License
+## ⚙️ Configuration
 
-MIT License. Crafted with precision for macOS.
+GestureDaemon stores your settings in a clean, human-readable property list at:
+```bash
+~/.config/GestureDaemon/config.plist
+```
 
+To edit it anytime, click the Menu Bar icon and select **Open Configuration File...**, or edit in your terminal:
+```bash
+open -e ~/.config/GestureDaemon/config.plist
+```
+
+> **Hot-Reloading**: GestureDaemon monitors the file descriptor. The millisecond you save changes, settings are applied live without needing to restart the daemon.
+
+### Example: Per-Application Overrides
+
+You can override gestures and buttons for specific applications using their bundle identifier:
+
+```xml
+<key>Applications</key>
+<dict>
+    <!-- Safari: Flick Left/Right cycles tabs instead of switching Spaces -->
+    <key>com.apple.Safari</key>
+    <dict>
+        <key>DragLeftAction</key>
+        <dict>
+            <key>Type</key><string>Shortcut</string>
+            <key>KeyCode</key><integer>33</integer>
+            <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
+            <key>Comment</key><string>Previous Tab (Cmd+Shift+[)</string>
+        </dict>
+        <key>DragRightAction</key>
+        <dict>
+            <key>Type</key><string>Shortcut</string>
+            <key>KeyCode</key><integer>30</integer>
+            <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
+            <key>Comment</key><string>Next Tab (Cmd+Shift+])</string>
+        </dict>
+    </dict>
+
+    <!-- Visual Studio Code: Back/Forward navigates editor history -->
+    <key>com.microsoft.VSCode</key>
+    <dict>
+        <key>BackButtonAction</key>
+        <dict>
+            <key>Type</key><string>Shortcut</string>
+            <key>KeyCode</key><integer>24</integer>
+            <key>Modifiers</key><array><string>Control</string></array>
+            <key>Comment</key><string>Navigate Back</string>
+        </dict>
+        <key>ForwardButtonAction</key>
+        <dict>
+            <key>Type</key><string>Shortcut</string>
+            <key>KeyCode</key><integer>24</integer>
+            <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
+            <key>Comment</key><string>Navigate Forward</string>
+        </dict>
+    </dict>
+</dict>
+```
+
+---
+
+## 🔍 Diagnostics & Troubleshooting
+
+GestureDaemon provides comprehensive live logging and a CLI diagnostic mode:
+
+### 1. View Live Event Logs
+Monitor button presses, frontmost application detections, and gesture resolutions in real-time:
+```bash
+tail -f ~/.config/GestureDaemon/daemon.log
+```
+
+### 2. Run Interactive Hardware Diagnostics
+To inspect raw mouse button numbers and modifier keycodes from your physical hardware:
+```bash
+make diagnose
+# Or directly:
+/Applications/GestureDaemon.app/Contents/MacOS/GestureDaemon --diagnostics
+```
+
+### 3. Recover Hidden Menu Bar Icon
+If you hid the status bar icon via "Hide Menu Bar Icon", simply launch **GestureDaemon** again from `/Applications` or Spotlight. The running daemon will wake up, temporarily restore the menu bar item, and display the menu.
+
+---
+
+## 📚 Complete Documentation
+
+For complete architectural deep-dives, parameter dictionaries, virtual keycode lookup tables, and the upcoming feature roadmap, see:
+
+📖 **[Full Architecture & Configuration Guide (DOCUMENTATION.md)](DOCUMENTATION.md)**
+
+---
+
+## 🤝 Contributing
+
+Contributions, bug reports, and feature suggestions are welcome!
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/my-new-feature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin feature/my-new-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.

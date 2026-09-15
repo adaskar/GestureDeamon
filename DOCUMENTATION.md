@@ -16,20 +16,23 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
    - [WindowServer Spaces & Mission Control Integration](#e-windowserver-spaces--mission-control-integration)
    - [Zero-Overhead Ephemeral Dynamic Motion Tap (0.0% CPU)](#f-zero-overhead-ephemeral-dynamic-motion-tap-00-cpu)
    - [Standard macOS DMG Packaging](#g-standard-macos-dmg-packaging)
+   - [Universal Side Navigation Buttons & Low-Level HID Injection](#h-universal-side-navigation-buttons--low-level-hid-injection)
+   - [Per-Application Contextual Profiles](#i-per-application-contextual-profiles)
+   - [Real-Time File Logging (daemon.log)](#j-real-time-file-logging-daemonlog)
 2. [Complete Configuration Guide (config.plist)](#2-complete-configuration-guide-configplist)
    - [Configuration Locations & Priority](#configuration-locations--priority)
    - [Live Hot-Reloading](#live-hot-reloading)
    - [Configuration Schema & Parameter Reference](#configuration-schema--parameter-reference)
    - [Action Types & Syntax](#action-types--syntax)
-   - [Virtual KeyCode Reference Table](#virtual-keycode-reference-table)
+   - [Virtual KeyCode Reference Table & Layout Mapping](#virtual-keycode-reference-table)
+   - [Per-Application Contextual Profiles (Applications)](#per-application-contextual-profiles-applications)
    - [Real-World Configuration Recipes](#real-world-configuration-recipes)
 3. [Future Roadmap (What We Can Do Next)](#3-future-roadmap-what-we-can-do-next)
    - [Direct Bluetooth LE HID++ Support](#1-direct-bluetooth-le-hid-support)
-   - [Per-Application Contextual Profiles](#2-per-application-contextual-profiles)
-   - [Diagonal & 8-Way Gesture Recognition](#3-diagonal--8-way-gesture-recognition)
-   - [Haptic Feedback Integration](#4-haptic-feedback-integration)
-   - [SwiftUI Native Preferences Window](#5-swiftui-native-preferences-window)
-   - [Developer ID Signing & Notarization Pipeline](#6-developer-id-signing--notarization-pipeline)
+   - [Diagonal & 8-Way Gesture Recognition](#2-diagonal--8-way-gesture-recognition)
+   - [Haptic Feedback Integration](#3-haptic-feedback-integration)
+   - [SwiftUI Native Preferences Window](#4-swiftui-native-preferences-window)
+   - [Developer ID Signing & Notarization Pipeline](#5-developer-id-signing--notarization-pipeline)
 
 ---
 
@@ -80,6 +83,23 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
 
 ### G. Standard macOS DMG Packaging
 - Created `scripts/create_dmg.sh` and `make dmg` targets to generate `build/GestureDaemon.dmg` with an embedded `/Applications` drag-and-drop symlink and custom multi-resolution icon (`AppIcon.icns`).
+
+### H. Universal Side Navigation Buttons & Low-Level HID Injection
+- **Problem**: Standard mouse thumb buttons (Button 3 & Button 4) are typically ignored by macOS Safari, Chrome, and Finder unless remapped.
+- **Solution**:
+  - `EventTapManager` captures Button 3 (Back) and Button 4 (Forward), swallows raw mouse down/up/drag events, and executes context-aware navigation.
+  - In standard macOS applications (Safari, Chrome, Finder, System Settings), dispatches `Cmd + [` and `Cmd + ]`.
+  - In code editors (Visual Studio Code, VSCodium), dispatches editor history navigation (`Ctrl + -` and `Ctrl + Shift + -`).
+  - **Low-Level HID Injection (`.cghidEventTap`)**: While system apps intercept shortcuts at the menu level (`.cgSessionEventTap`), Electron and Chromium applications (like VS Code) process keyboard input through the low-level HID subsystem. Keystrokes are injected directly into `.cghidEventTap` with hardware device modifier flags (`NX_DEVICELCTLKEYMASK`), ensuring seamless delivery to all GUI frameworks.
+
+### I. Per-Application Contextual Profiles
+- Dynamic gesture and button remapping based on the frontmost application.
+- `ConfigManager` synchronously evaluates `NSWorkspace.shared.frontmostApplication?.bundleIdentifier` and matches defined profiles under `<key>Applications</key>` in `config.plist`.
+- Any gesture or button omitted in an app profile gracefully falls back to your global configuration, offering complete flexibility with zero configuration boilerplate.
+
+### J. Real-Time File Logging (`daemon.log`)
+- Unified logging subsystem writing directly to `~/.config/GestureDaemon/daemon.log` alongside `os.Logger` and stdout.
+- Logs button presses, frontmost application detections, resolved actions, and gesture states with microsecond timestamps for effortless diagnosis (`tail -f ~/.config/GestureDaemon/daemon.log`).
 
 ---
 
@@ -271,6 +291,16 @@ For custom shortcuts, refer to standard macOS virtual keycodes:
 | **V** | `9` | **F2** | `120` |
 | **T** | `17` | **F11** | `103` |
 | **R** | `15` | **F12** | `111` |
+| **Minus / Underscore (US ANSI)** | `27` | **Equal / Plus (US ANSI)** | `24` |
+
+> [!TIP]
+> **Hardware KeyCodes vs. International Keyboard Layouts**:
+> macOS virtual keycodes represent the **physical position** on a standard US ANSI keyboard.
+> On localized layouts such as **Turkish Q**, the characters on the top row are rearranged:
+> - **KeyCode 27** (physical switch right of `0`) produces `*` / `?`.
+> - **KeyCode 24** (physical switch between `27` and Delete) produces **`-`** / **`_`**!
+> 
+> Therefore, if you are configuring a shortcut for the `-` key on a Turkish Q layout (e.g. for VS Code navigation), use **`KeyCode 24`** (`kVK_ANSI_Equal`) because your finger physically presses switch #24 to type `-`.
 
 ---
 
@@ -465,10 +495,7 @@ While GestureDaemon currently provides full feature parity with Logitech Options
 - **Current State**: `HIDPlusPlusManager` currently listens via `IOHIDManager` for USB receivers (Vendor ID `0x046d`, Usage Page `0xFF00`). When connected over Bluetooth, Logitech mice default to standard HID descriptor emulation and send the thumb button via the fallback keyboard macro (`Cmd+Option+Tab`).
 - **Improvement**: Implement direct Bluetooth HID++ parsing using `IOBluetooth` / `CoreBluetooth` or custom L2CAP channel listening. This would allow reading battery levels, setting DPI on the fly, and toggling SmartShift ratchet mode directly over Bluetooth without requiring a USB Unifying/Bolt receiver.
 
-### 2. Per-Application Contextual Profiles (Completed in v1.2)
-- ✅ Implemented via `NSWorkspace.didActivateApplicationNotification` and `<key>Applications</key>` dictionary with hierarchical action resolution.
-
-### 3. Diagonal & 8-Way Gesture Recognition
+### 2. Diagonal & 8-Way Gesture Recognition
 - **Concept**: Expand from 4 cardinal directions (Left, Right, Up, Down) to 8 directions by evaluating the angle $\theta = \operatorname{atan2}(\Delta y, \Delta x)$:
   - `DragUpLeftAction`
   - `DragUpRightAction`
@@ -476,20 +503,20 @@ While GestureDaemon currently provides full feature parity with Logitech Options
   - `DragDownRightAction`
 - Gives power users 8 distinct gesture actions on a single thumb button.
 
-### 4. Haptic Feedback Integration
+### 3. Haptic Feedback Integration
 - **Concept**: Provide physical sensory confirmation when a gesture threshold is reached.
 - **Implementation**:
   - For MacBook users, trigger the trackpad's Force Touch Taptic Engine using `NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)`.
   - For supported mice with internal haptic actuators (e.g. MX Master 4), send the HID++ 2.0 haptic pulse command over the receiver report pipe when `distance >= ThresholdDistance`.
 
-### 5. SwiftUI Native Preferences Window
+### 4. SwiftUI Native Preferences Window
 - **Concept**: A modern, clean settings window accessed from the menu bar ("Preferences...") for users who prefer visual configuration over raw plist editing.
 - **Architecture**:
   - Built with pure SwiftUI (`Settings` or `NSWindowController`).
   - Reads and writes to the existing `config.plist` model, maintaining full compatibility with the CLI and live file watcher.
   - Interactive keycode recorder and button tester.
 
-### 6. Developer ID Signing & Notarization Pipeline
+### 5. Developer ID Signing & Notarization Pipeline
 - **Concept**: Prepare the application for public distribution outside local machines without triggering macOS Gatekeeper warnings.
 - **Implementation**:
   - Add `notarize` target to `Makefile` using `xcrun notarytool submit build/GestureDaemon.dmg --keychain-profile ... --wait`.
