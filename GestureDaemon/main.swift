@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.info("Accessibility granted. Starting event taps and hardware drivers...")
             EventTapManager.shared.start()
             HIDPlusPlusManager.shared.start()
+            SleepWakeManager.shared.start()
         }
 
         // Install graceful SIGTERM handler
@@ -69,6 +70,7 @@ if isDiagnostics {
         Log.info("Starting EventTap and HID++ Manager...")
         EventTapManager.shared.start()
         HIDPlusPlusManager.shared.start()
+        SleepWakeManager.shared.start()
     }
 
     let sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)

@@ -12,7 +12,15 @@ public final class EventTapManager {
 
     private let stateMachine = GestureStateMachine()
     private var diagnosticMode = false
-    public var isPaused: Bool = false
+    public var isPaused: Bool = false {
+        didSet {
+            if isPaused {
+                resetState()
+            } else {
+                ensureTapActive()
+            }
+        }
+    }
 
     private var isLogitechMacroActive = false
     private var cmdReleased = false
@@ -145,12 +153,9 @@ public final class EventTapManager {
     }
 
     private func handlePrimaryEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout {
-            Log.error("Primary EventTap disabled by macOS timeout. Re-enabling...")
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            Log.info("Primary EventTap disabled by macOS (\(type == .tapDisabledByTimeout ? "timeout" : "user input/sleep")). Re-enabling...")
             if let tap = primaryEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
-            return Unmanaged.passRetained(event)
-        }
-        if type == .tapDisabledByUserInput {
             return Unmanaged.passRetained(event)
         }
 
@@ -305,11 +310,8 @@ public final class EventTapManager {
     }
 
     private func handleMotionEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap = motionEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
-            return Unmanaged.passRetained(event)
-        }
-        if type == .tapDisabledByUserInput {
             return Unmanaged.passRetained(event)
         }
 
@@ -326,6 +328,29 @@ public final class EventTapManager {
 
         _ = stateMachine.handleMouseDragged(deltaX: dx, deltaY: dy)
         return nil // Swallow movement while gesture is engaged so cursor stays in place
+    }
+
+    public func ensureTapActive() {
+        if let tap = primaryEventTap {
+            if !CGEvent.tapIsEnabled(tap: tap) {
+                Log.info("Primary EventTap was inactive. Re-enabling...")
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+        } else {
+            Log.info("Primary EventTap missing. Starting...")
+            start()
+        }
+    }
+
+    public func resetState() {
+        macroSafetyTimer?.cancel()
+        macroSafetyTimer = nil
+        isLogitechMacroActive = false
+        cmdReleased = false
+        optReleased = false
+        stateMachine.reset()
+        stopMotionTap()
+        clearSystemModifiers()
     }
 
     public func clearSystemModifiers() {

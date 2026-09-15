@@ -16,6 +16,16 @@ public final class GestureStateMachine {
 
     public init() {}
 
+    public func reset() {
+        magicGestureTimer?.cancel()
+        magicGestureTimer = nil
+        isTriggerEngaged = false
+        accumulatedDeltaX = 0.0
+        accumulatedDeltaY = 0.0
+        gestureConsumed = false
+        onEngagementChanged?(false)
+    }
+
     public func handleMagicDown(windowDurationMs: Double = 200.0) -> Bool {
         isTriggerEngaged = true
         accumulatedDeltaX = 0.0

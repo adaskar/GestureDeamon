@@ -165,6 +165,59 @@ public final class HIDPlusPlusManager {
         }
     }
 
+    // MARK: - Sleep & Wake Recovery
+    public func handleSleep() {
+        Log.info("💤 System going to sleep. Resetting HID++ state...")
+        self.isGestureButtonPressed = false
+    }
+
+    public func handleWake() {
+        Log.info("☀️ System woke from sleep. Re-synchronizing HID++ hardware...")
+        self.isGestureButtonPressed = false
+
+        // 1. Immediate hardware diversion sync
+        reapplyHardwareDiversion()
+
+        // 2. Staged retries at +1.0s and +2.5s to account for Bluetooth link re-establishment
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            Log.info("☀️ Wake stage 1 (+1.0s): Verifying HID++ hardware connection...")
+            self?.reapplyHardwareDiversion()
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            Log.info("☀️ Wake stage 2 (+2.5s): Confirming HID++ diversion...")
+            self?.reapplyHardwareDiversion()
+        }
+    }
+
+    public func reapplyHardwareDiversion() {
+        self.isGestureButtonPressed = false
+        guard let device = self.activeDevice, self.isDeviceOpen else {
+            Log.info("No active open device found on wake. Re-checking HID Manager...")
+            if self.activeDevice == nil {
+                restartMatching()
+            }
+            return
+        }
+
+        switch self.connectedTransport {
+        case .bluetoothLE:
+            discoverBLEFeatures(device)
+        case .usb:
+            enableReceiverNotifications(device)
+            if let reprogIndex = self.reprogFeatureIndex {
+                divertGestureButtons(device: device, featureIndex: reprogIndex, deviceIndex: 0xFF)
+            }
+        case .none:
+            discoverBLEFeatures(device)
+        }
+    }
+
+    public func restartMatching() {
+        stop()
+        start()
+    }
+
     // MARK: - USB Receiver Setup
     private func enableReceiverNotifications(_ device: IOHIDDevice) {
         // HID++ 1.0 Set Register 0x00 on receiver 0xFF: Enable wireless notifications
