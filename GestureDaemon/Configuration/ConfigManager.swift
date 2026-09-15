@@ -121,13 +121,18 @@ public final class ConfigManager {
     public func effectiveAction(for slot: ActionSlot) -> ActionDefinition? {
         let currentBundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
 
-        if let bundle = currentBundle {
-            var profile = activeConfig.applications?[bundle]
-            if profile == nil && bundle.hasPrefix("com.microsoft.VSCode") {
-                profile = activeConfig.applications?["com.microsoft.VSCode"]
-            }
-            if profile == nil && (bundle == "com.visualstudio.code.oss" || bundle == "com.vscodium") {
-                profile = activeConfig.applications?["com.microsoft.VSCode"]
+        if let bundle = currentBundle, let apps = activeConfig.applications {
+            // 1. Exact match against configured bundle identifier
+            var profile = apps[bundle]
+
+            // 2. Dynamic prefix match (e.g. configured "com.microsoft.VSCode" matches "com.microsoft.VSCode.Insiders")
+            if profile == nil {
+                for (pattern, configuredProfile) in apps {
+                    if bundle.hasPrefix(pattern) {
+                        profile = configuredProfile
+                        break
+                    }
+                }
             }
 
             if let matchedProfile = profile {

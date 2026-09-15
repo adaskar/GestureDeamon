@@ -23,27 +23,15 @@ public final class ActionDispatcher {
 
     public func dispatchNavigationBack() {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
-            let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-            if frontApp.hasPrefix("com.microsoft.VSCode") || frontApp == "com.visualstudio.code.oss" || frontApp == "com.vscodium" {
-                // VS Code Go Back: Ctrl + Equal (Keycode 24 produces Ctrl+- in VS Code)
-                self?.sendSyntheticShortcut(keyCode: 24, modifiers: ["Control"])
-            } else {
-                // Universal macOS Navigation Back: Cmd + [
-                self?.sendSyntheticShortcut(keyCode: 33, modifiers: ["Command"])
-            }
+            // Universal macOS Navigation Back: Cmd + [
+            self?.sendSyntheticShortcut(keyCode: 33, modifiers: ["Command"])
         }
     }
 
     public func dispatchNavigationForward() {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
-            let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
-            if frontApp.hasPrefix("com.microsoft.VSCode") || frontApp == "com.visualstudio.code.oss" || frontApp == "com.vscodium" {
-                // VS Code Go Forward: Ctrl + Shift + Equal (Keycode 24 produces Ctrl+Shift+- in VS Code)
-                self?.sendSyntheticShortcut(keyCode: 24, modifiers: ["Control", "Shift"])
-            } else {
-                // Universal macOS Navigation Forward: Cmd + ]
-                self?.sendSyntheticShortcut(keyCode: 30, modifiers: ["Command"])
-            }
+            // Universal macOS Navigation Forward: Cmd + ]
+            self?.sendSyntheticShortcut(keyCode: 30, modifiers: ["Command"])
         }
     }
 
@@ -179,10 +167,6 @@ public final class ActionDispatcher {
 
         if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true) {
             keyDown.flags = flags
-            if keyCode == 27 {
-                var char: UniChar = modifiers.map { $0.lowercased() }.contains("shift") ? 0x5F : 0x2D
-                keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
-            }
             keyDown.post(tap: loc)
         }
 
@@ -190,10 +174,6 @@ public final class ActionDispatcher {
 
         if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) {
             keyUp.flags = flags
-            if keyCode == 27 {
-                var char: UniChar = modifiers.map { $0.lowercased() }.contains("shift") ? 0x5F : 0x2D
-                keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
-            }
             keyUp.post(tap: loc)
         }
 

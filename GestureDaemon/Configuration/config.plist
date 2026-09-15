@@ -77,6 +77,36 @@
                 <key>Comment</key><string>VS Code Navigate Forward (Ctrl+Shift+- / code: Equal)</string>
             </dict>
         </dict>
+        <key>com.visualstudio.code.oss</key>
+        <dict>
+            <key>BackButtonAction</key>
+            <dict>
+                <key>Type</key><string>Shortcut</string>
+                <key>KeyCode</key><integer>24</integer>
+                <key>Modifiers</key><array><string>Control</string></array>
+            </dict>
+            <key>ForwardButtonAction</key>
+            <dict>
+                <key>Type</key><string>Shortcut</string>
+                <key>KeyCode</key><integer>24</integer>
+                <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
+            </dict>
+        </dict>
+        <key>com.vscodium</key>
+        <dict>
+            <key>BackButtonAction</key>
+            <dict>
+                <key>Type</key><string>Shortcut</string>
+                <key>KeyCode</key><integer>24</integer>
+                <key>Modifiers</key><array><string>Control</string></array>
+            </dict>
+            <key>ForwardButtonAction</key>
+            <dict>
+                <key>Type</key><string>Shortcut</string>
+                <key>KeyCode</key><integer>24</integer>
+                <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
+            </dict>
+        </dict>
     </dict>
 </dict>
 </plist>
