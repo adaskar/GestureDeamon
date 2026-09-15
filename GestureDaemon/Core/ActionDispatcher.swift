@@ -25,8 +25,8 @@ public final class ActionDispatcher {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
             if frontApp.hasPrefix("com.microsoft.VSCode") || frontApp == "com.visualstudio.code.oss" || frontApp == "com.vscodium" {
-                // VS Code Go Back: Ctrl + -
-                self?.sendSyntheticShortcut(keyCode: 27, modifiers: ["Control"])
+                // VS Code Go Back: Ctrl + Equal (Keycode 24 produces Ctrl+- in VS Code)
+                self?.sendSyntheticShortcut(keyCode: 24, modifiers: ["Control"])
             } else {
                 // Universal macOS Navigation Back: Cmd + [
                 self?.sendSyntheticShortcut(keyCode: 33, modifiers: ["Command"])
@@ -38,8 +38,8 @@ public final class ActionDispatcher {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
             if frontApp.hasPrefix("com.microsoft.VSCode") || frontApp == "com.visualstudio.code.oss" || frontApp == "com.vscodium" {
-                // VS Code Go Forward: Ctrl + Shift + -
-                self?.sendSyntheticShortcut(keyCode: 27, modifiers: ["Control", "Shift"])
+                // VS Code Go Forward: Ctrl + Shift + Equal (Keycode 24 produces Ctrl+Shift+- in VS Code)
+                self?.sendSyntheticShortcut(keyCode: 24, modifiers: ["Control", "Shift"])
             } else {
                 // Universal macOS Navigation Forward: Cmd + ]
                 self?.sendSyntheticShortcut(keyCode: 30, modifiers: ["Command"])

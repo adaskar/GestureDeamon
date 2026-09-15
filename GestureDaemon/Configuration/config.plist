@@ -59,22 +59,22 @@
     <!-- Per-Application Contextual Profiles (override any gestures per app) -->
     <key>Applications</key>
     <dict>
-        <!-- Visual Studio Code: Back/Forward navigates editor history (^ - and ^ ⇧ -) -->
+        <!-- Visual Studio Code: Back/Forward navigates editor history (^ - and ^ ⇧ - via Equal keycode 24) -->
         <key>com.microsoft.VSCode</key>
         <dict>
             <key>BackButtonAction</key>
             <dict>
                 <key>Type</key><string>Shortcut</string>
-                <key>KeyCode</key><integer>27</integer>
+                <key>KeyCode</key><integer>24</integer>
                 <key>Modifiers</key><array><string>Control</string></array>
-                <key>Comment</key><string>VS Code Navigate Back (Ctrl+-)</string>
+                <key>Comment</key><string>VS Code Navigate Back (Ctrl+- / code: Equal)</string>
             </dict>
             <key>ForwardButtonAction</key>
             <dict>
                 <key>Type</key><string>Shortcut</string>
-                <key>KeyCode</key><integer>27</integer>
+                <key>KeyCode</key><integer>24</integer>
                 <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
-                <key>Comment</key><string>VS Code Navigate Forward (Ctrl+Shift+-)</string>
+                <key>Comment</key><string>VS Code Navigate Forward (Ctrl+Shift+- / code: Equal)</string>
             </dict>
         </dict>
     </dict>
