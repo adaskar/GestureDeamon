@@ -69,7 +69,7 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
   - **Drag Right** $\rightarrow$ Switch to Left Space (`KeyCode: 123` / HotKey `79`)
   - **Stationary Click / Tap** $\rightarrow$ Mission Control (`com.apple.expose.awake`)
   - **Drag Down** $\rightarrow$ App Exposé (`com.apple.expose.front.awake`)
-- **Latency Optimization**: Reduced the gesture evaluation window to **`50ms`**, making single clicks feel snappy and instantaneous while preserving reliable flick detection.
+- **Latency Optimization**: Reduced the gesture evaluation window to **`75ms`**, making single clicks feel snappy and instantaneous while preserving reliable flick detection.
 
 ### F. Zero-Overhead Ephemeral Dynamic Motion Tap (0.0% CPU)
 - **Root Cause of Previous CPU Spikes**:
@@ -77,7 +77,7 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
   - This caused a persistent `mouseMoved` tap to run constantly. Touchpads emit 120–240 sub-pixel events per second on ProMotion displays, forcing `WindowServer` to perform hundreds of synchronous Mach IPC context switches into `GestureDaemon` every second.
 - **The Ephemeral Lifecycle Solution**:
   - At daemon startup, **no motion tap exists** (`motionEventTap = nil`). `primaryEventTap` strictly listens to button clicks, keys, and modifier changes.
-  - When the user presses the gesture trigger, `startMotionTap()` creates the `mouseMoved` tap dynamically for the duration of the 50ms window.
+  - When the user presses the gesture trigger, `startMotionTap()` creates the `mouseMoved` tap dynamically for the duration of the 75ms window.
   - As soon as the swipe threshold is crossed or the stationary click timer expires, `stopMotionTap()` calls `CFMachPortInvalidate(tap)` and removes the run loop source, unregistering the tap from `WindowServer`.
   - **Result**: Moving the trackpad or mouse during normal operation produces **zero Mach messages, zero context switches, and steady 0.0% CPU**.
 
@@ -154,9 +154,9 @@ Below is the annotated XML schema for `config.plist`:
     <key>DeadzoneRadius</key>
     <real>8.0</real>
 
-    <!-- Duration in milliseconds to wait for a flick before triggering a stationary click (Default: 50.0) -->
+    <!-- Duration in milliseconds to wait for a flick before triggering a stationary click (Default: 75.0) -->
     <key>GestureWindowMs</key>
-    <real>50.0</real>
+    <real>75.0</real>
 
     <!-- Whether to display the icon in the macOS menu bar (Default: true) -->
     <key>ShowMenuBarIcon</key>
@@ -265,7 +265,7 @@ Below is the annotated XML schema for `config.plist`:
 | `TriggerButtonIndex` | Integer | `5` | Quartz mouse button index used as the gesture trigger (typically `5` for M720 thumb button). For standard thumb buttons, try `3` (Back) or `4` (Forward). Run `GestureDaemon --diagnostics` to view hardware indices. |
 | `ThresholdDistance` | Real | `35.0` | Minimum cursor travel (in screen points) required to trigger a directional swipe. Increase for stiffer gestures; decrease for effortless flicks. |
 | `DeadzoneRadius` | Real | `8.0` | Radius around the starting point where movement is ignored. Prevents hand tremor from turning a stationary click into an accidental swipe. |
-| `GestureWindowMs` | Real | `50.0` | Evaluation window in milliseconds. If the button is released or remains stationary within this window, `ClickAction` fires. If swiped beyond `ThresholdDistance` within this window, the corresponding directional action fires immediately. |
+| `GestureWindowMs` | Real | `75.0` | Evaluation window in milliseconds. If the button is released or remains stationary within this window, `ClickAction` fires. If swiped beyond `ThresholdDistance` within this window, the corresponding directional action fires immediately. |
 | `ShowMenuBarIcon` | Boolean | `true` | When `true`, displays the status icon in the macOS menu bar. When `false`, runs headlessly in the background. |
 | `SwallowTriggerEvents`| Boolean | `true` | When `true`, prevents the underlying button press from reaching the frontmost application. |
 | `EnableSideButtons` | Boolean | `true` | When `true`, intercepts mouse side buttons and converts them to navigation actions. |
@@ -368,7 +368,7 @@ For custom shortcuts, refer to standard macOS virtual keycodes:
     <key>TriggerButtonIndex</key><integer>5</integer>
     <key>ThresholdDistance</key><real>35.0</real>
     <key>DeadzoneRadius</key><real>8.0</real>
-    <key>GestureWindowMs</key><real>50.0</real>
+    <key>GestureWindowMs</key><real>75.0</real>
     <key>ShowMenuBarIcon</key><true/>
     <key>SwallowTriggerEvents</key><true/>
 

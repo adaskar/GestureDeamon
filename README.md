@@ -140,7 +140,7 @@ Hold the **Thumb Gesture Button** (or wrist-flick) and release:
 | **Wrist-Flick Right** | **Switch to Left Space** | CGS Symbolic HotKey `79` (`Ctrl + Left`) |
 | **Wrist-Flick Down** | **App Exposé** | `CoreDockSendNotification("com.apple.expose.front.awake")` |
 
-*Timing: 50 ms evaluation window. Threshold: 35 pt. Deadzone: 8 pt.*
+*Timing: 75 ms evaluation window. Threshold: 35 pt. Deadzone: 8 pt.*
 
 ### 2. Side Navigation Buttons
 

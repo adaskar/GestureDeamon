@@ -245,7 +245,7 @@ public final class ConfigManager {
     private static func fallbackDefaultConfig() -> AppConfig {
         AppConfig(
             triggerButtonIndex: 5, thresholdDistance: 35.0, deadzoneRadius: 8.0,
-            gestureWindowMs: 50.0, showMenuBarIcon: true, swallowTriggerEvents: true,
+            gestureWindowMs: 75.0, showMenuBarIcon: true, swallowTriggerEvents: true,
             clickAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
             dragLeftAction: ActionDefinition(type: .shortcut, keyCode: 124, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
             dragRightAction: ActionDefinition(type: .shortcut, keyCode: 123, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
