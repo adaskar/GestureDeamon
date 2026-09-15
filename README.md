@@ -46,33 +46,72 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 
 ## 🚀 Installation
 
-### Option 1: Drag-and-Drop Disk Image (Recommended)
+### Option 1: Build from Source (Recommended)
 
-1. Download the latest release: **`GestureDaemon.dmg`**.
-2. Double-click the DMG and drag **GestureDaemon.app** into your `/Applications` folder.
-3. Open **GestureDaemon** from Applications or Spotlight.
-4. When prompted, grant Accessibility in **System Settings → Privacy & Security → Accessibility**.
-5. Click the menu bar icon to toggle **Launch at Login**.
-
-### Option 2: Build From Source
+Compiling locally builds a native application specifically signed for your machine. Because it is compiled locally, macOS Gatekeeper permits execution immediately without quarantine restrictions.
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/guru/GestureDaemon.git
 cd GestureDaemon
 
-# Build universal fat binary (arm64 + x86_64) and pack app bundle
-make app
-
-# Install directly to /Applications and launch
+# 2. Build universal binary and install directly to /Applications
 make install
 ```
 
-To create a distributable disk image:
+#### Architecture-Specific Build Targets
+You can package the application bundle for specific architectures or both:
+
+- **Universal (Both Apple Silicon & Intel)**:
+  ```bash
+  make app
+  ```
+- **Apple Silicon (M1 / M2 / M3 / M4 - arm64)**:
+  ```bash
+  make app-arm64
+  ```
+- **Intel (x86_64)**:
+  ```bash
+  make app-x86_64
+  ```
+
+To build a distributable disk image:
 ```bash
 make dmg
 # Result: build/GestureDaemon.dmg
 ```
+
+Once installed, launch **GestureDaemon** from `/Applications` or Spotlight, grant Accessibility in **System Settings → Privacy & Security → Accessibility**, and click the menu bar icon to enable **Launch at Login**.
+
+---
+
+### Option 2: Pre-built Disk Image (`GestureDaemon.dmg`)
+
+> [!NOTE]
+> **Gatekeeper & Developer Verification Required**:
+> Because GestureDaemon is an open-source, non-commercial project developed without an Apple Developer Program subscription ($99/yr), releases are ad-hoc codesigned. When downloaded via a browser, macOS will quarantine the bundle and prevent immediate opening (*"cannot be opened because Apple cannot check it for malicious software"*).
+
+#### Step-by-Step Installation:
+1. Download **`GestureDaemon.dmg`** from the [Releases](https://github.com/guru/GestureDaemon/releases) page.
+2. Double-click the DMG and drag **`GestureDaemon.app`** into your `/Applications` folder.
+3. Attempt to launch **GestureDaemon** once from `/Applications` or Spotlight (you will see the Gatekeeper prompt; click **Done** or **Cancel**).
+4. Authorize the application:
+   - **Method A (System Settings GUI)**:
+     1. Open **System Settings** → **Privacy & Security**.
+     2. Scroll down to the **Security** section.
+     3. You will see: *"GestureDaemon.app was blocked from use because it is not from an identified developer"*.
+     4. Click **"Open Anyway"** and confirm with your password or Touch ID.
+   - **Method B (Terminal Quick-Fix)**:
+     Strip the quarantine attribute directly:
+     ```bash
+     xattr -cr /Applications/GestureDaemon.app
+     ```
+     Then launch normally:
+     ```bash
+     open /Applications/GestureDaemon.app
+     ```
+5. When prompted, grant Accessibility in **System Settings → Privacy & Security → Accessibility**.
+6. Click the menu bar icon to toggle **Launch at Login**.
 
 ---
 
