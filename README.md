@@ -177,10 +177,10 @@ You can override gestures and buttons for specific applications using their bund
 
 ## 🔍 Diagnostics & Troubleshooting
 
-GestureDaemon provides comprehensive live logging and a CLI diagnostic mode:
+GestureDaemon provides optional diagnostic logging (disabled by default for zero disk I/O and zero idle CPU) and an interactive CLI diagnostic mode:
 
 ### 1. View Live Event Logs
-Monitor button presses, frontmost application detections, and gesture resolutions in real-time:
+To activate file logging, set `<key>EnableLogging</key><true/>` in `~/.config/GestureDaemon/config.plist` (you can also set `<key>LogLevel</key>` to `"Debug"`, `"Info"`, or `"Error"`). Then monitor in real time:
 ```bash
 tail -f ~/.config/GestureDaemon/daemon.log
 ```

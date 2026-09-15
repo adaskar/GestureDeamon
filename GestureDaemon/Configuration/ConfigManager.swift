@@ -72,6 +72,10 @@ public struct AppConfig: Codable {
     public let backButtonAction: ActionDefinition?
     public let forwardButtonAction: ActionDefinition?
 
+    // Logging Configuration
+    public let enableLogging: Bool?
+    public let logLevel: String?
+
     // Per-Application Contextual Profiles
     public let applications: [String: AppProfile]?
 
@@ -92,6 +96,8 @@ public struct AppConfig: Codable {
         case forwardButtonIndex = "ForwardButtonIndex"
         case backButtonAction = "BackButtonAction"
         case forwardButtonAction = "ForwardButtonAction"
+        case enableLogging = "EnableLogging"
+        case logLevel = "LogLevel"
         case applications = "Applications"
     }
 }
@@ -114,6 +120,8 @@ public final class ConfigManager {
 
     private init() {
         self.activeConfig = ConfigManager.fallbackDefaultConfig()
+        Log.isEnabled = self.activeConfig.enableLogging ?? false
+        Log.currentLevel = LogLevel.fromString(self.activeConfig.logLevel)
         loadConfiguration()
         startMonitoringConfigFile()
     }
@@ -184,6 +192,8 @@ public final class ConfigManager {
         do {
             let data = try Data(contentsOf: url)
             self.activeConfig = try PropertyListDecoder().decode(AppConfig.self, from: data)
+            Log.isEnabled = self.activeConfig.enableLogging ?? false
+            Log.currentLevel = LogLevel.fromString(self.activeConfig.logLevel)
             Log.info("Configuration loaded from: \(url.path)")
         } catch {
             Log.error("Failed to parse config.plist: \(error.localizedDescription). Keeping active settings.")
@@ -246,6 +256,8 @@ public final class ConfigManager {
             forwardButtonIndex: 4,
             backButtonAction: nil,
             forwardButtonAction: nil,
+            enableLogging: false,
+            logLevel: "Info",
             applications: nil
         )
     }

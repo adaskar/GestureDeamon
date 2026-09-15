@@ -20,6 +20,10 @@
     <integer>3</integer>
     <key>ForwardButtonIndex</key>
     <integer>4</integer>
+    <key>EnableLogging</key>
+    <false/>
+    <key>LogLevel</key>
+    <string>Info</string>
     <key>ClickAction</key>
     <dict>
         <key>Type</key><string>Shortcut</string>

@@ -97,9 +97,12 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
 - `ConfigManager` synchronously evaluates `NSWorkspace.shared.frontmostApplication?.bundleIdentifier` and matches defined profiles under `<key>Applications</key>` in `config.plist`.
 - Any gesture or button omitted in an app profile gracefully falls back to your global configuration, offering complete flexibility with zero configuration boilerplate.
 
-### J. Real-Time File Logging (`daemon.log`)
-- Unified logging subsystem writing directly to `~/.config/GestureDaemon/daemon.log` alongside `os.Logger` and stdout.
-- Logs button presses, frontmost application detections, resolved actions, and gesture states with microsecond timestamps for effortless diagnosis (`tail -f ~/.config/GestureDaemon/daemon.log`).
+### J. Configurable Logging & Level Selection (`daemon.log`)
+- Logging is **disabled by default** (`EnableLogging = false`) to guarantee absolute zero disk I/O and 0.0% idle CPU consumption.
+- Can be activated dynamically via `config.plist` with live hot-reloading (no restart required).
+- Supports granular log levels: `"Debug"`, `"Info"`, `"Error"`, and `"None"`.
+- When enabled, logs button presses, frontmost application detections, resolved actions, and gesture states to `~/.config/GestureDaemon/daemon.log` (`tail -f ~/.config/GestureDaemon/daemon.log`).
+- Running interactive hardware diagnostics (`make diagnose` or `--diagnostics`) automatically forces active debug logging regardless of config settings.
 
 ---
 
@@ -174,6 +177,14 @@ Below is the annotated XML schema for `config.plist`:
     <!-- Hardware button index for Forward (Default: 4) -->
     <key>ForwardButtonIndex</key>
     <integer>4</integer>
+
+    <!-- Whether to enable diagnostic file logging to ~/.config/GestureDaemon/daemon.log (Default: false) -->
+    <key>EnableLogging</key>
+    <false/>
+
+    <!-- Diagnostic log level: "Debug", "Info", "Error", "None" (Default: "Info") -->
+    <key>LogLevel</key>
+    <string>Info</string>
 
     <!-- Optional custom action for Back button (omitted = smart navigation back: Cmd+[ / VS Code Ctrl+-) -->
     <!-- <key>BackButtonAction</key><dict> ... </dict> -->

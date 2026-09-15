@@ -2,9 +2,9 @@ import Cocoa
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = ConfigManager.shared
         Log.info("GestureDaemon application did finish launching.")
 
-        _ = ConfigManager.shared
         MenuBarController.shared.setup()
 
         DistributedNotificationCenter.default().addObserver(
@@ -58,6 +58,8 @@ let args = CommandLine.arguments
 let isDiagnostics = args.contains("--diagnostics")
 
 if isDiagnostics {
+    Log.isEnabled = true
+    Log.currentLevel = .debug
     Log.info("Launching GestureDaemon in DIAGNOSTIC mode...")
     EventTapManager.shared.enableDiagnostics(true)
 
