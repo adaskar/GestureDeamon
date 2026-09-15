@@ -39,7 +39,6 @@ public final class GestureStateMachine {
             self.accumulatedDeltaY = 0.0
             self.gestureConsumed = false
             self.onEngagementChanged?(false)
-            EventTapManager.forceReleaseModifiers()
         }
         timer.resume()
         self.magicGestureTimer = timer
@@ -47,7 +46,6 @@ public final class GestureStateMachine {
     }
 
     public func handleMagicUp() -> Bool {
-        EventTapManager.forceReleaseModifiers()
         return true
     }
 
@@ -76,9 +74,6 @@ public final class GestureStateMachine {
             isTriggerEngaged = false
             onEngagementChanged?(false)
             executeDirectionalAction(resolveDirection(dx: accumulatedDeltaX, dy: accumulatedDeltaY))
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                EventTapManager.forceReleaseModifiers()
-            }
         }
         return config.swallowTriggerEvents
     }
@@ -96,7 +91,6 @@ public final class GestureStateMachine {
         accumulatedDeltaY = 0.0
         gestureConsumed = false
         onEngagementChanged?(false)
-        EventTapManager.forceReleaseModifiers()
         return config.swallowTriggerEvents
     }
 

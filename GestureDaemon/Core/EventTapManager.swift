@@ -14,6 +14,11 @@ public final class EventTapManager {
     private var diagnosticMode = false
     public var isPaused: Bool = false
 
+    private var isLogitechMacroActive = false
+    private var cmdReleased = false
+    private var optReleased = false
+    private var macroSafetyTimer: DispatchSourceTimer?
+
     private init() {
         stateMachine.onEngagementChanged = { [weak self] engaged in
             self?.setMotionTrackingEnabled(engaged)
@@ -164,6 +169,21 @@ public final class EventTapManager {
         case .keyDown:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
             if keycode == 48 && event.flags.contains(.maskCommand) && event.flags.contains(.maskAlternate) {
+                isLogitechMacroActive = true
+                cmdReleased = false
+                optReleased = false
+
+                macroSafetyTimer?.cancel()
+                let safetyTimer = DispatchSource.makeTimerSource(queue: .main)
+                safetyTimer.schedule(deadline: .now() + 1.5)
+                safetyTimer.setEventHandler { [weak self] in
+                    guard let self = self, self.isLogitechMacroActive else { return }
+                    self.isLogitechMacroActive = false
+                    self.clearSystemModifiers()
+                }
+                safetyTimer.resume()
+                self.macroSafetyTimer = safetyTimer
+
                 if !isPaused {
                     let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 200.0
                     _ = stateMachine.handleMagicDown(windowDurationMs: windowMs)
@@ -178,11 +198,23 @@ public final class EventTapManager {
             }
         case .flagsChanged:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            if stateMachine.isEngaged && (keycode == 55 || keycode == 58 || keycode == 0) {
-                if !event.flags.contains(.maskCommand) && !event.flags.contains(.maskAlternate) {
-                    EventTapManager.forceReleaseModifiers()
+            if isLogitechMacroActive && (keycode == 55 || keycode == 58) {
+                let hadCommand = event.flags.contains(.maskCommand)
+                let hadAlternate = event.flags.contains(.maskAlternate)
+
+                // Strip Command & Option from flags so WindowServer & apps never see them active
+                event.flags.remove([.maskCommand, .maskAlternate])
+
+                if keycode == 55 { cmdReleased = true }
+                if keycode == 58 { optReleased = true }
+
+                if (!hadCommand && !hadAlternate) || (cmdReleased && optReleased) {
+                    isLogitechMacroActive = false
+                    macroSafetyTimer?.cancel()
+                    macroSafetyTimer = nil
+                    clearSystemModifiers()
                 }
-                return nil // SWALLOW modifier changes while magic gesture window is active
+                return Unmanaged.passRetained(event)
             }
         default:
             break
@@ -283,20 +315,11 @@ public final class EventTapManager {
         return nil // Swallow movement while gesture is engaged so cursor stays in place
     }
 
-    public static func forceReleaseModifiers() {
-        let source = CGEventSource(stateID: .hidSystemState)
-        // Explicitly clear key-up flagsChanged ONLY for Command & Option (Logitech thumb macro keys)
-        let modifierKeys: [CGKeyCode] = [55, 58] // Left Command, Left Option
-        for key in modifierKeys {
-            if let ev = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) {
-                ev.type = .flagsChanged
-                ev.flags = []
-                ev.post(tap: .cghidEventTap)
-            }
+    public func clearSystemModifiers() {
+        if let clearEvent = CGEvent(source: nil) {
+            clearEvent.type = .flagsChanged
+            clearEvent.flags = []
+            clearEvent.post(tap: .cghidEventTap)
         }
-    }
-
-    private func clearSystemModifiers() {
-        EventTapManager.forceReleaseModifiers()
     }
 }
