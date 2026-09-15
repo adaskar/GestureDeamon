@@ -273,7 +273,7 @@ public final class HIDPlusPlusManager {
         let deviceIndex = bytes[1]
 
         let hex = bytes.prefix(12).map { String(format: "%02X", $0) }.joined(separator: " ")
-        Log.info("📥 HID++ IN: ID=0x\(String(format: "%02X", reportId)), len=\(length) [\(hex)]")
+        Log.debug("📥 HID++ IN: ID=0x\(String(format: "%02X", reportId)), len=\(length) [\(hex)]")
 
         // 1. Long Report (20 bytes): HID++ 2.0 communication
         if reportId == 0x11 && length >= 20 {
@@ -326,6 +326,12 @@ public final class HIDPlusPlusManager {
                     return
                 }
 
+                // Response to setCidReporting() (Function 3)
+                if fn == 0x03 {
+                    Log.debug("✅ setCidReporting confirmation received from hardware.")
+                    return
+                }
+
                 // Event Notification: DivertedButtonsEvent (Array of active CIDs)
                 var activeCids: [UInt16] = []
                 for offset in stride(from: 4, to: min(length, 12), by: 2) {
@@ -335,7 +341,7 @@ public final class HIDPlusPlusManager {
                     }
                 }
 
-                Log.info("🎯 Active Diverted CIDs: [\(activeCids.map { String(format: "0x%04X", $0) }.joined(separator: ", "))]")
+                Log.debug("🎯 Active Diverted CIDs: [\(activeCids.map { String(format: "0x%04X", $0) }.joined(separator: ", "))]")
 
                 // Check if any active CID is a gesture button
                 let isGestureDown = activeCids.contains(where: { gestureCIDs.contains($0) })
