@@ -468,15 +468,18 @@ public final class HIDPlusPlusManager {
         let ptr = IOHIDValueGetBytePtr(value)
         guard Int(bitPattern: ptr) != 0 else { return }
 
-        diagReportCounts[reportId, default: 0] += 1
+        guard (reportId == 0x11 && (length == 19 || length == 20)) ||
+              (reportId == 0x10 && (length == 6 || length == 7)) else {
+            return
+        }
 
-        guard reportId == 0x11 || reportId == 0x10 else { return }
+        diagReportCounts[reportId, default: 0] += 1
 
         print("[HID-DIAG] 📥 BLE InputValue matched: ReportID=0x\(String(format: "%02X", reportId)), len=\(length)")
         fflush(stdout)
 
         var bytes: [UInt8]
-        if ptr[0] == reportId {
+        if ptr[0] == reportId && length >= 20 {
             bytes = Array(UnsafeBufferPointer(start: ptr, count: length))
         } else {
             bytes = [reportId] + Array(UnsafeBufferPointer(start: ptr, count: length))
@@ -512,6 +515,7 @@ public final class HIDPlusPlusManager {
     /// Processes confirmed HID++ frames (0x10/0x11).
     /// ALWAYS runs on the main thread — must never be called from any other queue.
     private func processHIDPlusPlusReport(bytes: [UInt8]) {
+        guard bytes.count >= 7 else { return }
         let reportId = bytes[0]
         let length   = bytes.count
         let deviceIndex = bytes[1]
