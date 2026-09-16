@@ -63,6 +63,22 @@ public final class EventTapManager {
         return activeRecordingSession != nil
     }
 
+    public var isCalibrationMode: Bool {
+        get { stateMachine.isCalibrationMode }
+        set {
+            stateMachine.isCalibrationMode = newValue
+            if !newValue {
+                stateMachine.reset()
+                stopMotionTap()
+            }
+        }
+    }
+
+    public var onCalibrationEvent: ((CalibrationEvent) -> Void)? {
+        get { stateMachine.onCalibrationEvent }
+        set { stateMachine.onCalibrationEvent = newValue }
+    }
+
     private init() {
         stateMachine.onEngagementChanged = { [weak self] engaged in
             self?.setMotionTrackingEnabled(engaged)
@@ -129,7 +145,7 @@ public final class EventTapManager {
         self.primaryEventTap = pTap
         let pSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, pTap, 0)
         self.primaryRunLoopSource = pSource
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), pSource, .commonModes)
+        CFRunLoopAddSource(CFRunLoopGetMain(), pSource, .commonModes)
         CGEvent.tapEnable(tap: pTap, enable: true)
 
         Log.info("Primary event tap engaged (zero motion overhead).")
@@ -159,7 +175,7 @@ public final class EventTapManager {
         self.motionEventTap = mTap
         let mSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mTap, 0)
         self.motionRunLoopSource = mSource
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), mSource, .commonModes)
+        CFRunLoopAddSource(CFRunLoopGetMain(), mSource, .commonModes)
         CGEvent.tapEnable(tap: mTap, enable: true)
     }
 
@@ -167,7 +183,7 @@ public final class EventTapManager {
         guard let mTap = motionEventTap else { return }
         CGEvent.tapEnable(tap: mTap, enable: false)
         if let mSource = motionRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), mSource, .commonModes)
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), mSource, .commonModes)
         }
         CFMachPortInvalidate(mTap)
         self.motionEventTap = nil
@@ -178,7 +194,7 @@ public final class EventTapManager {
         if let tap = primaryEventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             if let source = primaryRunLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
             }
             CFMachPortInvalidate(tap)
         }
@@ -280,8 +296,8 @@ public final class EventTapManager {
             }
         case .keyUp:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keycode == 48 {
-                return nil // ALWAYS SWALLOW Tab key release
+            if keycode == 48 && (isLogitechMacroActive || stateMachine.isEngaged) {
+                return nil // Swallow Tab key release only when Logitech macro or gesture was active
             }
         case .flagsChanged:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -322,6 +338,17 @@ public final class EventTapManager {
 
             if buttonNumber != config.triggerButtonIndex {
                 if buttonNumber == backIndex {
+                    if isCalibrationMode {
+                        if type == .otherMouseDown {
+                            let action = ConfigManager.shared.effectiveAction(for: .backButton)
+                            let label = action?.comment ?? "Universal Back (⌘[)"
+                            onCalibrationEvent?(.otherButton(buttonIndex: Int(backIndex), isDown: true, actionName: label))
+                        } else if type == .otherMouseUp {
+                            onCalibrationEvent?(.otherButton(buttonIndex: Int(backIndex), isDown: false, actionName: nil))
+                        }
+                        return nil // Swallow in calibration mode without dispatching to system
+                    }
+
                     if type == .otherMouseDown {
                         let frontApp = NSWorkspace.shared.frontmostApplication
                         let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
@@ -339,6 +366,17 @@ public final class EventTapManager {
                     }
                     return nil // Swallow down, up, and drag for side navigation button
                 } else if buttonNumber == forwardIndex {
+                    if isCalibrationMode {
+                        if type == .otherMouseDown {
+                            let action = ConfigManager.shared.effectiveAction(for: .forwardButton)
+                            let label = action?.comment ?? "Universal Forward (⌘])"
+                            onCalibrationEvent?(.otherButton(buttonIndex: Int(forwardIndex), isDown: true, actionName: label))
+                        } else if type == .otherMouseUp {
+                            onCalibrationEvent?(.otherButton(buttonIndex: Int(forwardIndex), isDown: false, actionName: nil))
+                        }
+                        return nil // Swallow in calibration mode without dispatching to system
+                    }
+
                     if type == .otherMouseDown {
                         let frontApp = NSWorkspace.shared.frontmostApplication
                         let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
@@ -355,6 +393,12 @@ public final class EventTapManager {
                         }
                     }
                     return nil // Swallow down, up, and drag for side navigation button
+                } else if isCalibrationMode {
+                    if type == .otherMouseDown {
+                        onCalibrationEvent?(.otherButton(buttonIndex: Int(buttonNumber), isDown: true, actionName: "Button \(buttonNumber)"))
+                    } else if type == .otherMouseUp {
+                        onCalibrationEvent?(.otherButton(buttonIndex: Int(buttonNumber), isDown: false, actionName: nil))
+                    }
                 }
             }
         }
@@ -379,12 +423,18 @@ public final class EventTapManager {
     }
 
     private func handleMotionEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if type == .tapDisabledByTimeout {
             if let tap = motionEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return Unmanaged.passRetained(event)
+        }
+        if type == .tapDisabledByUserInput {
             return Unmanaged.passRetained(event)
         }
 
         guard type == .mouseMoved, stateMachine.isEngaged else {
+            if !stateMachine.isEngaged {
+                stopMotionTap()
+            }
             return Unmanaged.passRetained(event)
         }
 

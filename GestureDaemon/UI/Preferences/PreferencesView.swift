@@ -66,6 +66,12 @@ public struct PreferencesView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onChange(of: selectedTab) { newTab in
+            if newTab != .liveTester {
+                EventTapManager.shared.isCalibrationMode = false
+                EventTapManager.shared.resetState()
+            }
+        }
         .frame(minWidth: 780, minHeight: 560)
         .background(Color(NSColor.windowBackgroundColor))
     }

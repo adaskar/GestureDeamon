@@ -111,6 +111,13 @@ public struct LiveTesterView: View {
         .onDisappear {
             stopEventMonitoring()
         }
+        .onReceive(NotificationCenter.default.publisher(for: PreferencesWindowController.windowFocusDidChangeNotification)) { _ in
+            if PreferencesWindowController.shared.isPreferencesWindowKey {
+                startEventMonitoring()
+            } else {
+                stopEventMonitoring()
+            }
+        }
     }
 
     // MARK: - Subviews
@@ -269,82 +276,97 @@ public struct LiveTesterView: View {
     // MARK: - Event Monitoring
 
     private func startEventMonitoring() {
-        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [
-            .leftMouseDown, .leftMouseUp,
-            .rightMouseDown, .rightMouseUp,
-            .otherMouseDown, .otherMouseUp,
-            .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
-            .mouseMoved
-        ]) { [self] event in
-            handleMouseEvent(event)
-            return event
+        guard PreferencesWindowController.shared.isPreferencesWindowKey else {
+            stopEventMonitoring()
+            return
+        }
+
+        EventTapManager.shared.isCalibrationMode = true
+        EventTapManager.shared.onCalibrationEvent = { [self] event in
+            DispatchQueue.main.async {
+                handleCalibrationEvent(event)
+            }
+        }
+
+        if localEventMonitor == nil {
+            localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [
+                .leftMouseDown, .leftMouseUp,
+                .rightMouseDown, .rightMouseUp
+            ]) { [self] event in
+                switch event.type {
+                case .leftMouseDown:
+                    pressedButtons.insert(0)
+                case .leftMouseUp:
+                    pressedButtons.remove(0)
+                case .rightMouseDown:
+                    pressedButtons.insert(1)
+                case .rightMouseUp:
+                    pressedButtons.remove(1)
+                default:
+                    break
+                }
+                return event
+            }
         }
     }
 
     private func stopEventMonitoring() {
+        EventTapManager.shared.isCalibrationMode = false
+        EventTapManager.shared.onCalibrationEvent = nil
+        EventTapManager.shared.resetState()
         if let monitor = localEventMonitor {
             NSEvent.removeMonitor(monitor)
             localEventMonitor = nil
         }
+        pressedButtons.removeAll()
+        isTriggerDown = false
+        dragOffset = .zero
+        detectedDirection = nil
     }
 
-    private func handleMouseEvent(_ event: NSEvent) {
-        switch event.type {
-        case .leftMouseDown:
-            pressedButtons.insert(0)
-        case .leftMouseUp:
-            pressedButtons.remove(0)
-
-        case .rightMouseDown:
-            pressedButtons.insert(1)
-        case .rightMouseUp:
-            pressedButtons.remove(1)
-
-        case .otherMouseDown:
-            let btn = event.buttonNumber
-            pressedButtons.insert(btn)
-            if btn == triggerIndex {
+    private func handleCalibrationEvent(_ event: CalibrationEvent) {
+        switch event {
+        case .triggerState(let isDown, let buttonIndex):
+            if isDown {
+                pressedButtons.insert(buttonIndex)
                 isTriggerDown = true
                 dragOffset = .zero
                 detectedDirection = nil
-            }
-
-        case .otherMouseUp:
-            let btn = event.buttonNumber
-            pressedButtons.remove(btn)
-            if btn == triggerIndex {
+            } else {
+                pressedButtons.remove(buttonIndex)
                 isTriggerDown = false
-                let dist = hypot(dragOffset.width, dragOffset.height)
-                if dist < deadzoneRadius {
-                    lastFiredActionDescription = "Triggered: Thumb Click"
-                } else if let dir = detectedDirection {
-                    lastFiredActionDescription = "Triggered: Swipe \(dir)"
-                }
             }
 
-        case .otherMouseDragged, .leftMouseDragged, .rightMouseDragged, .mouseMoved:
-            if isTriggerDown {
-                dragOffset.width += event.deltaX
-                dragOffset.height += event.deltaY // deltaY is positive downwards in macOS screen space
+        case .motionUpdated(let dx, let dy, _):
+            dragOffset = CGSize(width: dx, height: dy)
 
-                let dx = dragOffset.width
-                let dy = dragOffset.height
-                let dist = hypot(dx, dy)
+        case .directionDetected(let direction, let action):
+            let dirStr: String
+            switch direction {
+            case .left: dirStr = "LEFT"
+            case .right: dirStr = "RIGHT"
+            case .up: dirStr = "UP"
+            case .down: dirStr = "DOWN"
+            }
+            detectedDirection = dirStr
+            let actionDesc = action?.comment ?? "Swipe \(dirStr)"
+            lastFiredActionDescription = "Detected: Swipe \(dirStr) (\(actionDesc))"
 
-                if dist >= thresholdDistance {
-                    // Check dominant axis
-                    if abs(dx) > abs(dy) {
-                        detectedDirection = dx > 0 ? "RIGHT" : "LEFT"
-                    } else {
-                        detectedDirection = dy > 0 ? "DOWN" : "UP"
-                    }
-                } else {
-                    detectedDirection = nil
-                }
+        case .gestureCompleted(let wasClick, let action):
+            if wasClick {
+                let actionDesc = action?.comment ?? "Thumb Click"
+                lastFiredActionDescription = "Detected: Thumb Click (\(actionDesc))"
             }
 
-        default:
-            break
+        case .otherButton(let buttonIndex, let isDown, let actionName):
+            if isDown {
+                pressedButtons.insert(buttonIndex)
+                if let name = actionName {
+                    lastFiredActionDescription = "Clicked: Button \(buttonIndex) (\(name))"
+                }
+            } else {
+                pressedButtons.remove(buttonIndex)
+            }
         }
     }
 }
