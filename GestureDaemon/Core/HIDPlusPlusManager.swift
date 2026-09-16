@@ -22,13 +22,7 @@ public final class HIDPlusPlusManager {
     // Cached HID++ 2.0 feature indices
     private var reprogFeatureIndex: UInt8?
 
-    // ── Diagnostic report-rate tracking (always-on, zero per-report overhead) ──────
-    // Counts incoming HID reports by report ID and prints a 1-second summary to stdout.
-    // This is NOT gated on Log.isEnabled — it is always active so we can measure the
-    // true callback frequency on BLE devices even in production builds.
-    private var diagReportCounts: [UInt8: Int] = [:]
-    private var diagRateTimer: DispatchSourceTimer?
-    // ────────────────────────────────────────────────────────────────────────────────
+
 
 
     // Gesture Button Component IDs (Logitech specification)
@@ -113,38 +107,6 @@ public final class HIDPlusPlusManager {
         }
     }
 
-    // MARK: - Diagnostic Report-Rate Timer
-
-    /// Starts a 1-second repeating timer on the main queue that prints a per-report-ID
-    /// frequency summary.  Always-on (not gated on Log.isEnabled).
-    /// Note: diagReportCounts is written from the BLE background thread and read here on
-    /// the main thread — the race is benign for a diagnostic counter (worst case: a slightly
-    /// stale value).  No lock needed for this use case.
-    private func startDiagRateTimer() {
-        guard diagRateTimer == nil else { return }
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + 1.0, repeating: 1.0)
-        timer.setEventHandler { [weak self] in
-            guard let self = self, !self.diagReportCounts.isEmpty else { return }
-            let total = self.diagReportCounts.values.reduce(0, +)
-            let breakdown = self.diagReportCounts
-                .sorted { $0.key < $1.key }
-                .map { "ID=0x\(String(format: "%02X", $0.key)):\($0.value)/s" }
-                .joined(separator: "  ")
-            print("[HID-DIAG] Report rate — \(breakdown)  total=\(total)/s")
-            fflush(stdout)
-            self.diagReportCounts.removeAll(keepingCapacity: true)
-        }
-        timer.resume()
-        self.diagRateTimer = timer
-    }
-
-    private func stopDiagRateTimer() {
-        diagRateTimer?.cancel()
-        diagRateTimer = nil
-        diagReportCounts.removeAll()
-    }
-
     public func stop() {
         guard isStarted, let manager = hidManager else { return }
         if let dev = activeDevice {
@@ -160,7 +122,6 @@ public final class HIDPlusPlusManager {
         self.connectedTransport = nil
         self.isDeviceOpen = false
         self.reprogFeatureIndex = nil
-        stopDiagRateTimer()
         Log.info("HID++ Manager stopped.")
     }
 
@@ -168,6 +129,8 @@ public final class HIDPlusPlusManager {
 
     private func deviceConnected(_ device: IOHIDDevice) {
         self.activeDevice = device
+        self.reprogFeatureIndex = nil
+        self.isGestureButtonPressed = false
 
         let productName = (IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String) ?? "Logitech Device"
         let transportStr = (IOHIDDeviceGetProperty(device, kIOHIDTransportKey as CFString) as? String) ?? "Unknown"
@@ -391,31 +354,9 @@ public final class HIDPlusPlusManager {
     private var isGestureButtonPressed = false
 
     private func divertGestureButtons(device: IOHIDDevice, featureIndex: UInt8, deviceIndex: UInt8) {
-        // Query control count first to inspect all buttons on this mouse
-        queryControlCount(device: device, featureIndex: featureIndex, deviceIndex: deviceIndex)
-
         for cid in gestureCIDs {
             divertControl(device: device, cid: cid, featureIndex: featureIndex, deviceIndex: deviceIndex)
         }
-    }
-
-    private func queryControlCount(device: IOHIDDevice, featureIndex: UInt8, deviceIndex: UInt8) {
-        var report = [UInt8](repeating: 0x00, count: 20)
-        report[0] = 0x11
-        report[1] = deviceIndex
-        report[2] = featureIndex
-        report[3] = 0x00 // Function 0: getCount
-        _ = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0x11, report, report.count)
-    }
-
-    private func queryControlInfo(device: IOHIDDevice, featureIndex: UInt8, controlIndex: UInt8, deviceIndex: UInt8) {
-        var report = [UInt8](repeating: 0x00, count: 20)
-        report[0] = 0x11
-        report[1] = deviceIndex
-        report[2] = featureIndex
-        report[3] = 0x10 // Function 1: getCidInfo
-        report[4] = controlIndex
-        _ = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0x11, report, report.count)
     }
 
     private func divertControl(device: IOHIDDevice, cid: UInt16, featureIndex: UInt8, deviceIndex: UInt8) {
@@ -547,39 +488,17 @@ public final class HIDPlusPlusManager {
             if featureIndex == self.reprogFeatureIndex {
                 let fn = functionOrEvent >> 4
 
-                // Response to getCount() (Function 0)
-                if fn == 0x00 && length >= 5 && bytes[4] > 0 && bytes[4] < 64 {
-                    let count = bytes[4]
-                    Log.info("📋 0x1B04 Total Control Count: \(count)")
-                    if let dev = self.activeDevice {
-                        for i in 0..<count {
-                            queryControlInfo(device: dev, featureIndex: featureIndex, controlIndex: i, deviceIndex: deviceIndex)
-                        }
-                    }
-                    return
-                }
-
-                // Response to getCidInfo() (Function 1)
-                if fn == 0x01 && length >= 9 {
-                    let cid  = (UInt16(bytes[4]) << 8) | UInt16(bytes[5])
-                    let task = (UInt16(bytes[6]) << 8) | UInt16(bytes[7])
-                    let flags = bytes[8]
-                    Log.info("📋 Control: CID=0x\(String(format: "%04X", cid)), Task=0x\(String(format: "%04X", task)), Flags=0x\(String(format: "%02X", flags))")
-
-                    if task == 0x00B4 || gestureCIDs.contains(cid) {
-                        Log.info("🎯 Found Gesture Button Control (CID: 0x\(String(format: "%04X", cid)), Task: 0x\(String(format: "%04X", task))). Diverting...")
-                        if let dev = self.activeDevice {
-                            divertControl(device: dev, cid: cid, featureIndex: featureIndex, deviceIndex: deviceIndex)
-                        }
-                    }
-                    return
-                }
-
                 // Response to setCidReporting() (Function 3)
                 if fn == 0x03 {
                     Log.debug("✅ setCidReporting confirmation received from hardware.")
                     return
                 }
+
+                // In Logitech HID++ 2.0 (Feature 0x1B04), button press/release notifications
+                // are strictly Event 0 (functionOrEvent == 0x00).
+                // Any other functionOrEvent value is a response to another command, query, or error,
+                // and MUST NEVER be parsed as a button press!
+                guard functionOrEvent == 0x00 else { return }
 
                 // Event Notification: DivertedButtonsEvent (Array of active CIDs)
                 var activeCids: [UInt16] = []
