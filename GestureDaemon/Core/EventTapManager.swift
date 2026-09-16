@@ -27,6 +27,58 @@ public final class EventTapManager {
     private var optReleased = false
     private var macroSafetyTimer: DispatchSourceTimer?
 
+    // Active shortcut recording session in Preferences UI
+    public struct ShortcutRecordingSession {
+        public let onCapture: (UInt16, [String]) -> Void
+        public let onFlagsChanged: ([String]) -> Void
+        public let onCancel: () -> Void
+        public let onClear: () -> Void
+    }
+
+    private var activeRecordingSession: ShortcutRecordingSession?
+    private var lastRecordedKeyCode: Int64?
+
+    public func startRecordingShortcut(
+        onCapture: @escaping (UInt16, [String]) -> Void,
+        onFlagsChanged: @escaping ([String]) -> Void,
+        onCancel: @escaping () -> Void,
+        onClear: @escaping () -> Void
+    ) {
+        self.activeRecordingSession = ShortcutRecordingSession(
+            onCapture: onCapture,
+            onFlagsChanged: onFlagsChanged,
+            onCancel: onCancel,
+            onClear: onClear
+        )
+        self.lastRecordedKeyCode = nil
+        ensureTapActive()
+    }
+
+    public func stopRecordingShortcut() {
+        self.activeRecordingSession = nil
+        self.lastRecordedKeyCode = nil
+    }
+
+    public var isRecordingShortcutActive: Bool {
+        return activeRecordingSession != nil
+    }
+
+    public var isCalibrationMode: Bool {
+        get { stateMachine.isCalibrationMode }
+        set {
+            stateMachine.isCalibrationMode = newValue
+            if !newValue {
+                stateMachine.reset()
+                stopMotionTap()
+            }
+        }
+    }
+
+    public var onCalibrationEvent: ((CalibrationEvent) -> Void)? {
+        get { stateMachine.onCalibrationEvent }
+        set { stateMachine.onCalibrationEvent = newValue }
+    }
+
     private init() {
         stateMachine.onEngagementChanged = { [weak self] engaged in
             self?.setMotionTrackingEnabled(engaged)
@@ -40,8 +92,7 @@ public final class EventTapManager {
     public func handleHIDPlusPlusGesture(pressed: Bool) {
         if isPaused { return }
         if pressed {
-            let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 75.0
-            _ = stateMachine.handleMagicDown(windowDurationMs: windowMs)
+            _ = stateMachine.handleMagicDown(isMacro: false)
         } else {
             _ = stateMachine.handleMagicUp()
         }
@@ -93,7 +144,7 @@ public final class EventTapManager {
         self.primaryEventTap = pTap
         let pSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, pTap, 0)
         self.primaryRunLoopSource = pSource
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), pSource, .commonModes)
+        CFRunLoopAddSource(CFRunLoopGetMain(), pSource, .commonModes)
         CGEvent.tapEnable(tap: pTap, enable: true)
 
         Log.info("Primary event tap engaged (zero motion overhead).")
@@ -123,7 +174,7 @@ public final class EventTapManager {
         self.motionEventTap = mTap
         let mSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mTap, 0)
         self.motionRunLoopSource = mSource
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), mSource, .commonModes)
+        CFRunLoopAddSource(CFRunLoopGetMain(), mSource, .commonModes)
         CGEvent.tapEnable(tap: mTap, enable: true)
     }
 
@@ -131,7 +182,7 @@ public final class EventTapManager {
         guard let mTap = motionEventTap else { return }
         CGEvent.tapEnable(tap: mTap, enable: false)
         if let mSource = motionRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), mSource, .commonModes)
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), mSource, .commonModes)
         }
         CFMachPortInvalidate(mTap)
         self.motionEventTap = nil
@@ -142,7 +193,7 @@ public final class EventTapManager {
         if let tap = primaryEventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             if let source = primaryRunLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
             }
             CFMachPortInvalidate(tap)
         }
@@ -157,6 +208,39 @@ public final class EventTapManager {
             Log.info("Primary EventTap disabled by macOS (\(type == .tapDisabledByTimeout ? "timeout" : "user input/sleep")). Re-enabling...")
             if let tap = primaryEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passRetained(event)
+        }
+
+        // Intercept and swallow keystrokes during active shortcut recording in Preferences UI
+        // This prevents macOS system hotkeys (like Ctrl+Down for App Exposé or Ctrl+Up for Mission Control) from triggering!
+        if let session = activeRecordingSession {
+            if type == .flagsChanged {
+                let mods = KeyCodeHelper.modifiersFromNSEventFlags(NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)))
+                session.onFlagsChanged(mods)
+                return Unmanaged.passRetained(event)
+            } else if type == .keyDown {
+                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+                if keycode == 53 { // Escape cancels recording
+                    activeRecordingSession = nil
+                    session.onCancel()
+                    return nil // SWALLOW Escape
+                }
+                let mods = KeyCodeHelper.modifiersFromNSEventFlags(NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)))
+                if keycode == 51 && mods.isEmpty { // Bare Delete/Backspace clears
+                    activeRecordingSession = nil
+                    session.onClear()
+                    return nil // SWALLOW Delete
+                }
+                lastRecordedKeyCode = keycode
+                activeRecordingSession = nil
+                session.onCapture(UInt16(keycode), mods)
+                return nil // SWALLOW KEY DOWN: Prevents macOS system shortcuts (Exposé, Mission Control, etc.) from firing!
+            } else if type == .keyUp {
+                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+                if keycode == lastRecordedKeyCode || keycode == 53 || keycode == 51 {
+                    lastRecordedKeyCode = nil
+                    return nil // SWALLOW KEY UP
+                }
+            }
         }
 
         if diagnosticMode {
@@ -204,15 +288,15 @@ public final class EventTapManager {
 
                 if !isPaused {
                     let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 200.0
-                    _ = stateMachine.handleMagicDown(windowDurationMs: windowMs)
+                    _ = stateMachine.handleMagicDown(isMacro: true, windowDurationMs: windowMs)
                 }
                 clearSystemModifiers()
                 return nil // ALWAYS SWALLOW Tab key completely (even if paused, prevents VS Code focus stealing)
             }
         case .keyUp:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keycode == 48 {
-                return nil // ALWAYS SWALLOW Tab key release
+            if keycode == 48 && (isLogitechMacroActive || stateMachine.isEngaged) {
+                return nil // Swallow Tab key release only when Logitech macro or gesture was active
             }
         case .flagsChanged:
             let keycode = event.getIntegerValueField(.keyboardEventKeycode)
@@ -246,47 +330,79 @@ public final class EventTapManager {
         let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
         let config = ConfigManager.shared.activeConfig
 
-        // 3. Side Navigation Buttons (Back & Forward)
-        if config.enableSideButtons ?? true {
+        // In Calibration Mode (Live Tester), intercept all non-trigger buttons for live testing
+        if isCalibrationMode && buttonNumber != config.triggerButtonIndex {
             let backIndex = config.backButtonIndex ?? 3
             let forwardIndex = config.forwardButtonIndex ?? 4
 
-            if buttonNumber != config.triggerButtonIndex {
-                if buttonNumber == backIndex {
-                    if type == .otherMouseDown {
-                        let frontApp = NSWorkspace.shared.frontmostApplication
-                        let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
-                        let appName = frontApp?.localizedName ?? "UNKNOWN"
-                        let pid = frontApp?.processIdentifier ?? 0
-                        let customAction = ConfigManager.shared.effectiveAction(for: .backButton)
-
-                        Log.info("🖱️ [BACK BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+[)")")
-
-                        if let action = customAction {
-                            ActionDispatcher.shared.dispatch(action: action)
-                        } else {
-                            ActionDispatcher.shared.dispatchNavigationBack()
-                        }
-                    }
-                    return nil // Swallow down, up, and drag for side navigation button
-                } else if buttonNumber == forwardIndex {
-                    if type == .otherMouseDown {
-                        let frontApp = NSWorkspace.shared.frontmostApplication
-                        let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
-                        let appName = frontApp?.localizedName ?? "UNKNOWN"
-                        let pid = frontApp?.processIdentifier ?? 0
-                        let customAction = ConfigManager.shared.effectiveAction(for: .forwardButton)
-
-                        Log.info("🖱️ [FORWARD BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+])")")
-
-                        if let action = customAction {
-                            ActionDispatcher.shared.dispatch(action: action)
-                        } else {
-                            ActionDispatcher.shared.dispatchNavigationForward()
-                        }
-                    }
-                    return nil // Swallow down, up, and drag for side navigation button
+            if buttonNumber == backIndex {
+                if type == .otherMouseDown {
+                    let action = ConfigManager.shared.effectiveAction(for: .backButton)
+                    let label = action?.comment ?? "Universal Back (⌘[)"
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(backIndex), isDown: true, actionName: label))
+                } else if type == .otherMouseUp {
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(backIndex), isDown: false, actionName: nil))
                 }
+                return nil
+            } else if buttonNumber == forwardIndex {
+                if type == .otherMouseDown {
+                    let action = ConfigManager.shared.effectiveAction(for: .forwardButton)
+                    let label = action?.comment ?? "Universal Forward (⌘])"
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(forwardIndex), isDown: true, actionName: label))
+                } else if type == .otherMouseUp {
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(forwardIndex), isDown: false, actionName: nil))
+                }
+                return nil
+            } else {
+                let label = buttonNumber == 2 ? "Middle Click" : "Button \(buttonNumber)"
+                if type == .otherMouseDown {
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(buttonNumber), isDown: true, actionName: label))
+                } else if type == .otherMouseUp {
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(buttonNumber), isDown: false, actionName: nil))
+                }
+                return nil
+            }
+        }
+
+        // 3. Side Navigation Buttons (Back & Forward) in normal operation
+        if (config.enableSideButtons ?? true) && buttonNumber != config.triggerButtonIndex {
+            let backIndex = config.backButtonIndex ?? 3
+            let forwardIndex = config.forwardButtonIndex ?? 4
+
+            if buttonNumber == backIndex {
+                if type == .otherMouseDown {
+                    let frontApp = NSWorkspace.shared.frontmostApplication
+                    let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
+                    let appName = frontApp?.localizedName ?? "UNKNOWN"
+                    let pid = frontApp?.processIdentifier ?? 0
+                    let customAction = ConfigManager.shared.effectiveAction(for: .backButton)
+
+                    Log.info("🖱️ [BACK BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+[)")")
+
+                    if let action = customAction {
+                        ActionDispatcher.shared.dispatch(action: action)
+                    } else {
+                        ActionDispatcher.shared.dispatchNavigationBack()
+                    }
+                }
+                return nil // Swallow down, up, and drag for side navigation button
+            } else if buttonNumber == forwardIndex {
+                if type == .otherMouseDown {
+                    let frontApp = NSWorkspace.shared.frontmostApplication
+                    let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
+                    let appName = frontApp?.localizedName ?? "UNKNOWN"
+                    let pid = frontApp?.processIdentifier ?? 0
+                    let customAction = ConfigManager.shared.effectiveAction(for: .forwardButton)
+
+                    Log.info("🖱️ [FORWARD BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+])")")
+
+                    if let action = customAction {
+                        ActionDispatcher.shared.dispatch(action: action)
+                    } else {
+                        ActionDispatcher.shared.dispatchNavigationForward()
+                    }
+                }
+                return nil // Swallow down, up, and drag for side navigation button
             }
         }
 
@@ -310,12 +426,18 @@ public final class EventTapManager {
     }
 
     private func handleMotionEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if type == .tapDisabledByTimeout {
             if let tap = motionEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return Unmanaged.passRetained(event)
+        }
+        if type == .tapDisabledByUserInput {
             return Unmanaged.passRetained(event)
         }
 
         guard type == .mouseMoved, stateMachine.isEngaged else {
+            if !stateMachine.isEngaged {
+                stopMotionTap()
+            }
             return Unmanaged.passRetained(event)
         }
 
