@@ -139,24 +139,23 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         prefsItem.target = self
         menu.addItem(prefsItem)
 
-        // Open Config
-        let configItem = NSMenuItem(title: "Open Configuration File...", action: #selector(openConfigFile), keyEquivalent: "")
-        configItem.target = self
-        menu.addItem(configItem)
-
-        // Accessibility Permission
+        // Permission Warnings (only displayed if action is required)
         let axGranted = PermissionHelper.isAccessibilityGranted
-        let axTitle = axGranted ? "Accessibility: Granted" : "⚠️ Accessibility: Missing (Authorize)"
-        let axItem = NSMenuItem(title: axTitle, action: #selector(checkAccessibility), keyEquivalent: "")
-        axItem.target = self
-        menu.addItem(axItem)
-
-        // Input Monitoring Permission (Crucial for Bluetooth LE)
         let imGranted = PermissionHelper.isInputMonitoringGranted
-        let imTitle = imGranted ? "Input Monitoring: Granted" : "⚠️ Input Monitoring: Missing (Authorize for BLE)"
-        let imItem = NSMenuItem(title: imTitle, action: #selector(checkInputMonitoring), keyEquivalent: "")
-        imItem.target = self
-        menu.addItem(imItem)
+
+        if !axGranted || !imGranted {
+            menu.addItem(NSMenuItem.separator())
+            if !axGranted {
+                let axItem = NSMenuItem(title: "⚠️ Accessibility: Missing (Authorize)", action: #selector(checkAccessibility), keyEquivalent: "")
+                axItem.target = self
+                menu.addItem(axItem)
+            }
+            if !imGranted {
+                let imItem = NSMenuItem(title: "⚠️ Input Monitoring: Missing (Authorize for BLE)", action: #selector(checkInputMonitoring), keyEquivalent: "")
+                imItem.target = self
+                menu.addItem(imItem)
+            }
+        }
 
         menu.addItem(NSMenuItem.separator())
 
@@ -211,15 +210,6 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
 
     @objc private func openPreferences() {
         PreferencesWindowController.shared.show()
-    }
-
-    @objc private func openConfigFile() {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let primaryPath = home.appendingPathComponent(".config/GestureDaemon/config.plist")
-        if !FileManager.default.fileExists(atPath: primaryPath.path) {
-            ConfigManager.shared.loadConfiguration()
-        }
-        NSWorkspace.shared.open(primaryPath)
     }
 
     @objc private func checkAccessibility() {

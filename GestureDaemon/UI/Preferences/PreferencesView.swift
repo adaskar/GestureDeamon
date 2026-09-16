@@ -113,6 +113,15 @@ public struct PreferencesView: View {
 
             Spacer()
 
+            // Open Config File
+            Button(action: {
+                viewModel.openConfigFileInEditor()
+            }) {
+                Label("Open Config", systemImage: "doc.text")
+                    .font(.caption)
+            }
+            .help("Open ~/.config/GestureDaemon/config.plist in default editor")
+
             // Live Save Status Notification
             if let status = viewModel.saveStatusMessage {
                 Text(status)

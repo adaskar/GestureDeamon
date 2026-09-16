@@ -322,20 +322,56 @@ public struct GeneralPreferencesView: View {
     }
 
     private var advancedSection: some View {
-        HStack(spacing: 12) {
-            Button("Open config.plist in Editor...") {
-                viewModel.openConfigFileInEditor()
-            }
-            .help("Edit raw XML property list directly")
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Configuration File & Factory Reset", systemImage: "doc.badge.gearshape")
+                .font(.headline)
 
-            Spacer()
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Configuration File")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Edit your custom property list directly (~/.config/GestureDaemon/config.plist).")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
 
-            Button("Reset to Factory Defaults...") {
-                showResetConfirmation = true
+                    Spacer()
+
+                    Button("Open in Editor...") {
+                        viewModel.openConfigFileInEditor()
+                    }
+                }
+
+                Divider()
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reset to Defaults")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Restore all gesture bindings and settings to factory defaults.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button("Reset to Defaults...") {
+                        showResetConfirmation = true
+                    }
+                    .foregroundColor(.red)
+                }
             }
-            .foregroundColor(.red)
+            .padding(14)
+            .background(Color(NSColor.windowBackgroundColor).opacity(0.8))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+            )
         }
-        .padding(.vertical, 4)
     }
 }
 
