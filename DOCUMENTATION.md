@@ -20,6 +20,8 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
    - [Per-Application Contextual Profiles](#i-per-application-contextual-profiles)
    - [Real-Time File Logging (daemon.log)](#j-real-time-file-logging-daemonlog)
    - [Direct Bluetooth LE HID++ Hardware Engine](#k-direct-bluetooth-le-hid-hardware-engine)
+   - [Sleep / Wake & Power Resilience Engine](#l-sleep--wake--power-resilience-engine)
+   - [SwiftUI Native Preferences Window & Keycode Resolver](#m-swiftui-native-preferences-window--keycode-resolver)
 2. [Complete Configuration Guide (config.plist)](#2-complete-configuration-guide-configplist)
    - [Configuration Locations & Priority](#configuration-locations--priority)
    - [Live Hot-Reloading](#live-hot-reloading)
@@ -29,11 +31,9 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
    - [Per-Application Contextual Profiles (Applications)](#per-application-contextual-profiles-applications)
    - [Real-World Configuration Recipes](#real-world-configuration-recipes)
 3. [Future Roadmap (What We Can Do Next)](#3-future-roadmap-what-we-can-do-next)
-   - [Direct Bluetooth LE HID++ Support](#1-direct-bluetooth-le-hid-support)
-   - [Diagonal & 8-Way Gesture Recognition](#2-diagonal--8-way-gesture-recognition)
-   - [Haptic Feedback Integration](#3-haptic-feedback-integration)
-   - [SwiftUI Native Preferences Window](#4-swiftui-native-preferences-window)
-   - [Developer ID Signing & Notarization Pipeline](#5-developer-id-signing--notarization-pipeline)
+   - [Diagonal & 8-Way Gesture Recognition](#1-diagonal--8-way-gesture-recognition)
+   - [Haptic Feedback Integration](#2-haptic-feedback-integration)
+   - [Developer ID Signing & Notarization Pipeline](#3-developer-id-signing--notarization-pipeline)
 
 ---
 
@@ -126,6 +126,23 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
   - Hardware transmission errors automatically trigger stale-handle recovery.
 - **Menu Bar Resume Sync**:
   - Toggling "Resume Gestures" in the menu bar executes an explicit health check and hardware re-initialization.
+
+### M. SwiftUI Native Preferences Window & Keycode Resolver
+- **Visual Preferences Window (`PreferencesWindowController`)**:
+  - Pure macOS 13+ native SwiftUI interface accessed via **Preferences...** (`⌘,`) from the menu bar status item.
+  - Multi-tab organization:
+    1. **Gestures**: Cardinal swipe cards (Left, Right, Up, Down) and Thumb Click with directional icons, explanations, and instant action assignment.
+    2. **Side Buttons**: Back & Forward button hardware index configuration and custom action / universal navigation diversion.
+    3. **App Profiles**: Master-detail per-application override manager with macOS Application bundle selection (`/Applications`), dynamic prefix matching, and inheritance toggles.
+    4. **General & Tuning**: Interactive sensitivity sliders (`ThresholdDistance`, `DeadzoneRadius`, `GestureWindowMs`, `SwallowTriggerEvents`) with human-friendly descriptions, startup login items, menu bar visibility, log level pickers, and permission status badges.
+    5. **Live Tester**: Real-time calibration canvas featuring button state badges, cursor displacement vectors, deadzone and threshold rings, and live gesture direction detection.
+- **Dynamic Keyboard Layout & KeyCode Resolver (`KeyCodeHelper`)**:
+  - Resolves macOS physical `CGKeyCode` to characters using Carbon `TISCopyCurrentKeyboardInputSource` and `UCKeyTranslate`, correctly displaying the active keyboard layout (QWERTY, AZERTY, Colemak, Turkish, etc.).
+  - Normalizes special keys (Arrows `↑ ↓ ← →`, `Return ↩`, `Tab ⇥`, `Delete ⌫`, `Escape ⎋`, `Space`, `F1-F20`, `Home/End/PageUp/PageDown`) and macOS modifier glyphs (`⌃`, `⌥`, `⇧`, `⌘`).
+  - Provides an interactive **Shortcut Recorder** (`ShortcutRecorderView`) allowing users to press any key combination without typing or searching for numeric keycodes.
+- **Bidirectional Config Sync & Debounced Auto-Save**:
+  - Changes in the UI auto-save to `~/.config/GestureDaemon/config.plist` using `PropertyListEncoder(outputFormat: .xml)`.
+  - External edits to `config.plist` are detected by the DispatchSource file monitor and instantly propagate to the open preferences window.
 
 ---
 
@@ -582,14 +599,7 @@ While GestureDaemon now provides full dual-transport (USB Unifying/Bolt & direct
   - For MacBook users, trigger the trackpad's Force Touch Taptic Engine using `NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)`.
   - For supported mice with internal haptic actuators (e.g. MX Master 4), send the HID++ 2.0 haptic pulse command over the receiver report pipe when `distance >= ThresholdDistance`.
 
-### 3. SwiftUI Native Preferences Window
-- **Concept**: A modern, clean settings window accessed from the menu bar ("Preferences...") for users who prefer visual configuration over raw plist editing.
-- **Architecture**:
-  - Built with pure SwiftUI (`Settings` or `NSWindowController`).
-  - Reads and writes to the existing `config.plist` model, maintaining full compatibility with the CLI and live file watcher.
-  - Interactive keycode recorder and button tester.
-
-### 4. Developer ID Signing & Notarization Pipeline
+### 3. Developer ID Signing & Notarization Pipeline
 - **Concept**: Prepare the application for public distribution outside local machines without triggering macOS Gatekeeper warnings.
 - **Implementation**:
   - Add `notarize` target to `Makefile` using `xcrun notarytool submit build/GestureDaemon.dmg --keychain-profile ... --wait`.

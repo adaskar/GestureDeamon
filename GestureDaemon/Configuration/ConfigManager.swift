@@ -1,27 +1,49 @@
 import Cocoa
 import Foundation
 
-public enum ActionSlot {
-    case click
-    case dragLeft
-    case dragRight
-    case dragUp
-    case dragDown
-    case backButton
-    case forwardButton
+public enum ActionSlot: String, CaseIterable, Identifiable {
+    case click = "Thumb Click"
+    case dragLeft = "Swipe Left"
+    case dragRight = "Swipe Right"
+    case dragUp = "Swipe Up"
+    case dragDown = "Swipe Down"
+    case backButton = "Back Button"
+    case forwardButton = "Forward Button"
+
+    public var id: String { rawValue }
 }
 
-public struct ActionDefinition: Codable {
-    public enum ActionType: String, Codable {
+public struct ActionDefinition: Codable, Equatable, Hashable {
+    public enum ActionType: String, Codable, CaseIterable, Identifiable {
         case shortcut = "Shortcut"
         case application = "Application"
         case command = "Command"
+
+        public var id: String { rawValue }
     }
-    public let type: ActionType
-    public let keyCode: UInt16?
-    public let modifiers: [String]?
-    public let bundleIdentifier: String?
-    public let commandPath: String?
+
+    public var type: ActionType
+    public var keyCode: UInt16?
+    public var modifiers: [String]?
+    public var bundleIdentifier: String?
+    public var commandPath: String?
+    public var comment: String?
+
+    public init(
+        type: ActionType,
+        keyCode: UInt16? = nil,
+        modifiers: [String]? = nil,
+        bundleIdentifier: String? = nil,
+        commandPath: String? = nil,
+        comment: String? = nil
+    ) {
+        self.type = type
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+        self.bundleIdentifier = bundleIdentifier
+        self.commandPath = commandPath
+        self.comment = comment
+    }
 
     enum CodingKeys: String, CodingKey {
         case type = "Type"
@@ -29,17 +51,36 @@ public struct ActionDefinition: Codable {
         case modifiers = "Modifiers"
         case bundleIdentifier = "BundleIdentifier"
         case commandPath = "CommandPath"
+        case comment = "Comment"
     }
 }
 
-public struct AppProfile: Codable {
-    public let clickAction: ActionDefinition?
-    public let dragLeftAction: ActionDefinition?
-    public let dragRightAction: ActionDefinition?
-    public let dragUpAction: ActionDefinition?
-    public let dragDownAction: ActionDefinition?
-    public let backButtonAction: ActionDefinition?
-    public let forwardButtonAction: ActionDefinition?
+public struct AppProfile: Codable, Equatable, Hashable {
+    public var clickAction: ActionDefinition?
+    public var dragLeftAction: ActionDefinition?
+    public var dragRightAction: ActionDefinition?
+    public var dragUpAction: ActionDefinition?
+    public var dragDownAction: ActionDefinition?
+    public var backButtonAction: ActionDefinition?
+    public var forwardButtonAction: ActionDefinition?
+
+    public init(
+        clickAction: ActionDefinition? = nil,
+        dragLeftAction: ActionDefinition? = nil,
+        dragRightAction: ActionDefinition? = nil,
+        dragUpAction: ActionDefinition? = nil,
+        dragDownAction: ActionDefinition? = nil,
+        backButtonAction: ActionDefinition? = nil,
+        forwardButtonAction: ActionDefinition? = nil
+    ) {
+        self.clickAction = clickAction
+        self.dragLeftAction = dragLeftAction
+        self.dragRightAction = dragRightAction
+        self.dragUpAction = dragUpAction
+        self.dragDownAction = dragDownAction
+        self.backButtonAction = backButtonAction
+        self.forwardButtonAction = forwardButtonAction
+    }
 
     enum CodingKeys: String, CodingKey {
         case clickAction = "ClickAction"
@@ -50,34 +91,100 @@ public struct AppProfile: Codable {
         case backButtonAction = "BackButtonAction"
         case forwardButtonAction = "ForwardButtonAction"
     }
+
+    public func action(for slot: ActionSlot) -> ActionDefinition? {
+        switch slot {
+        case .click: return clickAction
+        case .dragLeft: return dragLeftAction
+        case .dragRight: return dragRightAction
+        case .dragUp: return dragUpAction
+        case .dragDown: return dragDownAction
+        case .backButton: return backButtonAction
+        case .forwardButton: return forwardButtonAction
+        }
+    }
+
+    public mutating func setAction(_ action: ActionDefinition?, for slot: ActionSlot) {
+        switch slot {
+        case .click: clickAction = action
+        case .dragLeft: dragLeftAction = action
+        case .dragRight: dragRightAction = action
+        case .dragUp: dragUpAction = action
+        case .dragDown: dragDownAction = action
+        case .backButton: backButtonAction = action
+        case .forwardButton: forwardButtonAction = action
+        }
+    }
 }
 
-public struct AppConfig: Codable {
-    public let triggerButtonIndex: Int64
-    public let thresholdDistance: Double
-    public let deadzoneRadius: Double
-    public let gestureWindowMs: Double?
-    public let showMenuBarIcon: Bool?
-    public let swallowTriggerEvents: Bool
-    public let clickAction: ActionDefinition?
-    public let dragLeftAction: ActionDefinition?
-    public let dragRightAction: ActionDefinition?
-    public let dragUpAction: ActionDefinition?
-    public let dragDownAction: ActionDefinition?
+public struct AppConfig: Codable, Equatable {
+    public var triggerButtonIndex: Int64
+    public var thresholdDistance: Double
+    public var deadzoneRadius: Double
+    public var gestureWindowMs: Double?
+    public var showMenuBarIcon: Bool?
+    public var swallowTriggerEvents: Bool
+    public var clickAction: ActionDefinition?
+    public var dragLeftAction: ActionDefinition?
+    public var dragRightAction: ActionDefinition?
+    public var dragUpAction: ActionDefinition?
+    public var dragDownAction: ActionDefinition?
 
     // Side Navigation Buttons (Back / Forward)
-    public let enableSideButtons: Bool?
-    public let backButtonIndex: Int64?
-    public let forwardButtonIndex: Int64?
-    public let backButtonAction: ActionDefinition?
-    public let forwardButtonAction: ActionDefinition?
+    public var enableSideButtons: Bool?
+    public var backButtonIndex: Int64?
+    public var forwardButtonIndex: Int64?
+    public var backButtonAction: ActionDefinition?
+    public var forwardButtonAction: ActionDefinition?
 
     // Logging Configuration
-    public let enableLogging: Bool?
-    public let logLevel: String?
+    public var enableLogging: Bool?
+    public var logLevel: String?
 
     // Per-Application Contextual Profiles
-    public let applications: [String: AppProfile]?
+    public var applications: [String: AppProfile]?
+
+    public init(
+        triggerButtonIndex: Int64 = 5,
+        thresholdDistance: Double = 35.0,
+        deadzoneRadius: Double = 8.0,
+        gestureWindowMs: Double? = 75.0,
+        showMenuBarIcon: Bool? = true,
+        swallowTriggerEvents: Bool = true,
+        clickAction: ActionDefinition? = nil,
+        dragLeftAction: ActionDefinition? = nil,
+        dragRightAction: ActionDefinition? = nil,
+        dragUpAction: ActionDefinition? = nil,
+        dragDownAction: ActionDefinition? = nil,
+        enableSideButtons: Bool? = true,
+        backButtonIndex: Int64? = 3,
+        forwardButtonIndex: Int64? = 4,
+        backButtonAction: ActionDefinition? = nil,
+        forwardButtonAction: ActionDefinition? = nil,
+        enableLogging: Bool? = false,
+        logLevel: String? = "Info",
+        applications: [String: AppProfile]? = nil
+    ) {
+        self.triggerButtonIndex = triggerButtonIndex
+        self.thresholdDistance = thresholdDistance
+        self.deadzoneRadius = deadzoneRadius
+        self.gestureWindowMs = gestureWindowMs
+        self.showMenuBarIcon = showMenuBarIcon
+        self.swallowTriggerEvents = swallowTriggerEvents
+        self.clickAction = clickAction
+        self.dragLeftAction = dragLeftAction
+        self.dragRightAction = dragRightAction
+        self.dragUpAction = dragUpAction
+        self.dragDownAction = dragDownAction
+        self.enableSideButtons = enableSideButtons
+        self.backButtonIndex = backButtonIndex
+        self.forwardButtonIndex = forwardButtonIndex
+        self.backButtonAction = backButtonAction
+        self.forwardButtonAction = forwardButtonAction
+        self.enableLogging = enableLogging
+        self.logLevel = logLevel
+        self.applications = applications
+    }
 
     enum CodingKeys: String, CodingKey {
         case triggerButtonIndex = "TriggerButtonIndex"
@@ -100,16 +207,42 @@ public struct AppConfig: Codable {
         case logLevel = "LogLevel"
         case applications = "Applications"
     }
+
+    public func globalAction(for slot: ActionSlot) -> ActionDefinition? {
+        switch slot {
+        case .click: return clickAction
+        case .dragLeft: return dragLeftAction
+        case .dragRight: return dragRightAction
+        case .dragUp: return dragUpAction
+        case .dragDown: return dragDownAction
+        case .backButton: return backButtonAction
+        case .forwardButton: return forwardButtonAction
+        }
+    }
+
+    public mutating func setGlobalAction(_ action: ActionDefinition?, for slot: ActionSlot) {
+        switch slot {
+        case .click: clickAction = action
+        case .dragLeft: dragLeftAction = action
+        case .dragRight: dragRightAction = action
+        case .dragUp: dragUpAction = action
+        case .dragDown: dragDownAction = action
+        case .backButton: backButtonAction = action
+        case .forwardButton: forwardButtonAction = action
+        }
+    }
 }
 
 public final class ConfigManager {
     public static let shared = ConfigManager()
+    public static let configDidChangeNotification = Notification.Name("GestureDaemon.configDidChangeNotification")
+
     public private(set) var activeConfig: AppConfig
 
     private var fileMonitorSource: DispatchSourceFileSystemObject?
     private let fileManager = FileManager.default
 
-    private var configURL: URL {
+    public var configURL: URL {
         let home = fileManager.homeDirectoryForCurrentUser
         let primaryPath = home.appendingPathComponent(".config/GestureDaemon/config.plist")
         let fallbackPath = home.appendingPathComponent("Library/Application Support/GestureDaemon/config.plist")
@@ -144,42 +277,14 @@ public final class ConfigManager {
             }
 
             if let matchedProfile = profile {
-                switch slot {
-                case .click:
-                    if let action = matchedProfile.clickAction { return action }
-                case .dragLeft:
-                    if let action = matchedProfile.dragLeftAction { return action }
-                case .dragRight:
-                    if let action = matchedProfile.dragRightAction { return action }
-                case .dragUp:
-                    if let action = matchedProfile.dragUpAction { return action }
-                case .dragDown:
-                    if let action = matchedProfile.dragDownAction { return action }
-                case .backButton:
-                    if let action = matchedProfile.backButtonAction { return action }
-                case .forwardButton:
-                    if let action = matchedProfile.forwardButtonAction { return action }
+                if let action = matchedProfile.action(for: slot) {
+                    return action
                 }
             }
         }
 
         // Fallback to global config
-        switch slot {
-        case .click:
-            return activeConfig.clickAction
-        case .dragLeft:
-            return activeConfig.dragLeftAction
-        case .dragRight:
-            return activeConfig.dragRightAction
-        case .dragUp:
-            return activeConfig.dragUpAction
-        case .dragDown:
-            return activeConfig.dragDownAction
-        case .backButton:
-            return activeConfig.backButtonAction
-        case .forwardButton:
-            return activeConfig.forwardButtonAction
-        }
+        return activeConfig.globalAction(for: slot)
     }
 
     public func loadConfiguration() {
@@ -195,23 +300,50 @@ public final class ConfigManager {
             Log.isEnabled = self.activeConfig.enableLogging ?? false
             Log.currentLevel = LogLevel.fromString(self.activeConfig.logLevel)
             Log.info("Configuration loaded from: \(url.path)")
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                NotificationCenter.default.post(name: ConfigManager.configDidChangeNotification, object: self.activeConfig)
+            }
         } catch {
             Log.error("Failed to parse config.plist: \(error.localizedDescription). Keeping active settings.")
         }
     }
 
-    public func updateShowMenuBarIcon(_ show: Bool) {
+    public func saveConfiguration(_ newConfig: AppConfig) throws {
         let url = configURL
-        var dict: [String: Any] = [:]
-        if let data = try? Data(contentsOf: url),
-           let existing = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
-            dict = existing
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .xml
+        let data = try encoder.encode(newConfig)
+
+        try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: .atomic)
+        try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+
+        self.activeConfig = newConfig
+        Log.isEnabled = newConfig.enableLogging ?? false
+        Log.currentLevel = LogLevel.fromString(newConfig.logLevel)
+        Log.info("Configuration successfully saved to: \(url.path)")
+
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: ConfigManager.configDidChangeNotification, object: newConfig)
         }
-        dict["ShowMenuBarIcon"] = show
-        if let outputData = try? PropertyListSerialization.data(fromPropertyList: dict, format: .xml, options: 0) {
-            try? outputData.write(to: url, options: .atomic)
-            loadConfiguration()
+    }
+
+    public func resetToDefaults() {
+        let def = ConfigManager.fallbackDefaultConfig()
+        do {
+            try saveConfiguration(def)
+            Log.info("Configuration reset to factory defaults.")
+        } catch {
+            Log.error("Failed to reset configuration to defaults: \(error.localizedDescription)")
         }
+    }
+
+    public func updateShowMenuBarIcon(_ show: Bool) {
+        var updated = activeConfig
+        updated.showMenuBarIcon = show
+        try? saveConfiguration(updated)
     }
 
     private func startMonitoringConfigFile() {
@@ -221,7 +353,7 @@ public final class ConfigManager {
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd, eventMask: [.delete, .write, .rename], queue: .main)
         source.setEventHandler { [weak self] in
-            Log.info("config.plist changed. Reloading...")
+            Log.info("config.plist changed externally. Reloading...")
             self?.loadConfiguration()
         }
         source.setCancelHandler { close(fd) }
@@ -242,15 +374,15 @@ public final class ConfigManager {
         }
     }
 
-    private static func fallbackDefaultConfig() -> AppConfig {
+    public static func fallbackDefaultConfig() -> AppConfig {
         AppConfig(
             triggerButtonIndex: 5, thresholdDistance: 35.0, deadzoneRadius: 8.0,
             gestureWindowMs: 75.0, showMenuBarIcon: true, swallowTriggerEvents: true,
-            clickAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
-            dragLeftAction: ActionDefinition(type: .shortcut, keyCode: 124, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
-            dragRightAction: ActionDefinition(type: .shortcut, keyCode: 123, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
-            dragUpAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
-            dragDownAction: ActionDefinition(type: .shortcut, keyCode: 125, modifiers: ["Control"], bundleIdentifier: nil, commandPath: nil),
+            clickAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], comment: "Mission Control (Ctrl+Up)"),
+            dragLeftAction: ActionDefinition(type: .shortcut, keyCode: 124, modifiers: ["Control"], comment: "Natural swipe left -> Switch to Right Space"),
+            dragRightAction: ActionDefinition(type: .shortcut, keyCode: 123, modifiers: ["Control"], comment: "Natural swipe right -> Switch to Left Space"),
+            dragUpAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], comment: "Mission Control (Ctrl+Up)"),
+            dragDownAction: ActionDefinition(type: .shortcut, keyCode: 125, modifiers: ["Control"], comment: "App Exposé (Ctrl+Down)"),
             enableSideButtons: true,
             backButtonIndex: 3,
             forwardButtonIndex: 4,
@@ -258,7 +390,17 @@ public final class ConfigManager {
             forwardButtonAction: nil,
             enableLogging: false,
             logLevel: "Info",
-            applications: nil
+            applications: [
+                "com.microsoft.VSCode": AppProfile(
+                    clickAction: nil,
+                    dragLeftAction: nil,
+                    dragRightAction: nil,
+                    dragUpAction: nil,
+                    dragDownAction: nil,
+                    backButtonAction: ActionDefinition(type: .shortcut, keyCode: 24, modifiers: ["Control"], comment: "VS Code Navigate Back (Ctrl+-)"),
+                    forwardButtonAction: ActionDefinition(type: .shortcut, keyCode: 24, modifiers: ["Control", "Shift"], comment: "VS Code Navigate Forward (Ctrl+Shift+-)")
+                )
+            ]
         )
     }
 }

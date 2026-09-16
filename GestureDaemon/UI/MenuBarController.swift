@@ -22,22 +22,32 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         } else {
             Log.info("Menu bar icon hidden by user configuration.")
         }
+
+        NotificationCenter.default.addObserver(
+            forName: ConfigManager.configDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            let show = ConfigManager.shared.activeConfig.showMenuBarIcon ?? true
+            if show {
+                self.isTemporarilyVisible = false
+                self.createStatusItemIfNeeded()
+            } else if !self.isTemporarilyVisible {
+                self.removeStatusItem()
+            }
+        }
     }
 
     public func handleAppReopen() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            Log.info("Application reopen triggered. Making menu bar icon accessible...")
+            Log.info("Application reopen triggered. Opening Preferences...")
             let wasHidden = (self.statusItem == nil)
             if wasHidden {
                 self.isTemporarilyVisible = true
+                self.createStatusItemIfNeeded()
             }
-            self.createStatusItemIfNeeded()
-
-            // Open the menu so the user immediately sees the controls
-            if let button = self.statusItem?.button {
-                button.performClick(nil)
-            }
+            PreferencesWindowController.shared.show()
         }
     }
 
@@ -124,8 +134,13 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         loginItem.state = LoginItemManager.shared.isLaunchAtLoginEnabled ? .on : .off
         menu.addItem(loginItem)
 
+        // Preferences Window
+        let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+
         // Open Config
-        let configItem = NSMenuItem(title: "Open Configuration File...", action: #selector(openConfigFile), keyEquivalent: ",")
+        let configItem = NSMenuItem(title: "Open Configuration File...", action: #selector(openConfigFile), keyEquivalent: "")
         configItem.target = self
         menu.addItem(configItem)
 
@@ -192,6 +207,10 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func toggleLaunchAtLogin() {
         let currentlyEnabled = LoginItemManager.shared.isLaunchAtLoginEnabled
         _ = LoginItemManager.shared.setLaunchAtLogin(enabled: !currentlyEnabled)
+    }
+
+    @objc private func openPreferences() {
+        PreferencesWindowController.shared.show()
     }
 
     @objc private func openConfigFile() {

@@ -27,6 +27,42 @@ public final class EventTapManager {
     private var optReleased = false
     private var macroSafetyTimer: DispatchSourceTimer?
 
+    // Active shortcut recording session in Preferences UI
+    public struct ShortcutRecordingSession {
+        public let onCapture: (UInt16, [String]) -> Void
+        public let onFlagsChanged: ([String]) -> Void
+        public let onCancel: () -> Void
+        public let onClear: () -> Void
+    }
+
+    private var activeRecordingSession: ShortcutRecordingSession?
+    private var lastRecordedKeyCode: Int64?
+
+    public func startRecordingShortcut(
+        onCapture: @escaping (UInt16, [String]) -> Void,
+        onFlagsChanged: @escaping ([String]) -> Void,
+        onCancel: @escaping () -> Void,
+        onClear: @escaping () -> Void
+    ) {
+        self.activeRecordingSession = ShortcutRecordingSession(
+            onCapture: onCapture,
+            onFlagsChanged: onFlagsChanged,
+            onCancel: onCancel,
+            onClear: onClear
+        )
+        self.lastRecordedKeyCode = nil
+        ensureTapActive()
+    }
+
+    public func stopRecordingShortcut() {
+        self.activeRecordingSession = nil
+        self.lastRecordedKeyCode = nil
+    }
+
+    public var isRecordingShortcutActive: Bool {
+        return activeRecordingSession != nil
+    }
+
     private init() {
         stateMachine.onEngagementChanged = { [weak self] engaged in
             self?.setMotionTrackingEnabled(engaged)
@@ -157,6 +193,39 @@ public final class EventTapManager {
             Log.info("Primary EventTap disabled by macOS (\(type == .tapDisabledByTimeout ? "timeout" : "user input/sleep")). Re-enabling...")
             if let tap = primaryEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passRetained(event)
+        }
+
+        // Intercept and swallow keystrokes during active shortcut recording in Preferences UI
+        // This prevents macOS system hotkeys (like Ctrl+Down for App Exposé or Ctrl+Up for Mission Control) from triggering!
+        if let session = activeRecordingSession {
+            if type == .flagsChanged {
+                let mods = KeyCodeHelper.modifiersFromNSEventFlags(NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)))
+                session.onFlagsChanged(mods)
+                return Unmanaged.passRetained(event)
+            } else if type == .keyDown {
+                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+                if keycode == 53 { // Escape cancels recording
+                    activeRecordingSession = nil
+                    session.onCancel()
+                    return nil // SWALLOW Escape
+                }
+                let mods = KeyCodeHelper.modifiersFromNSEventFlags(NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)))
+                if keycode == 51 && mods.isEmpty { // Bare Delete/Backspace clears
+                    activeRecordingSession = nil
+                    session.onClear()
+                    return nil // SWALLOW Delete
+                }
+                lastRecordedKeyCode = keycode
+                activeRecordingSession = nil
+                session.onCapture(UInt16(keycode), mods)
+                return nil // SWALLOW KEY DOWN: Prevents macOS system shortcuts (Exposé, Mission Control, etc.) from firing!
+            } else if type == .keyUp {
+                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+                if keycode == lastRecordedKeyCode || keycode == 53 || keycode == 51 {
+                    lastRecordedKeyCode = nil
+                    return nil // SWALLOW KEY UP
+                }
+            }
         }
 
         if diagnosticMode {
