@@ -6,7 +6,7 @@ public enum GestureDirection { case left, right, up, down }
 public enum CalibrationEvent {
     case triggerState(isDown: Bool, buttonIndex: Int)
     case motionUpdated(dx: Double, dy: Double, distance: Double)
-    case directionDetected(GestureDirection, ActionDefinition?)
+    case directionDetected(GestureDirection?, ActionDefinition?)
     case gestureCompleted(wasClick: Bool, ActionDefinition?)
     case otherButton(buttonIndex: Int, isDown: Bool, actionName: String?)
 }
@@ -41,7 +41,7 @@ public final class GestureStateMachine {
         onEngagementChanged?(false)
     }
 
-    public func handleMagicDown(windowDurationMs: Double = 200.0) -> Bool {
+    public func handleMagicDown(isMacro: Bool = false, windowDurationMs: Double = 200.0) -> Bool {
         isTriggerEngaged = true
         accumulatedDeltaX = 0.0
         accumulatedDeltaY = 0.0
@@ -49,43 +49,54 @@ public final class GestureStateMachine {
         onEngagementChanged?(true)
         Log.info("Magic thumb button engaged (waiting for flick gesture or click timeout)...")
 
+        let triggerIndex = Int(ConfigManager.shared.activeConfig.triggerButtonIndex)
+
         if isCalibrationMode {
-            onCalibrationEvent?(.triggerState(isDown: true, buttonIndex: 5))
+            onCalibrationEvent?(.triggerState(isDown: true, buttonIndex: triggerIndex))
+            return true
         }
 
         magicGestureTimer?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        // Provide sufficient window in calibration mode, but ALWAYS timeout to guarantee zero motion overhead
-        let duration = isCalibrationMode ? max(windowDurationMs, 300.0) : windowDurationMs
-        timer.schedule(deadline: .now() + (duration / 1000.0))
-        timer.setEventHandler { [weak self] in
-            guard let self = self, self.isTriggerEngaged else { return }
-            if self.isCalibrationMode {
-                let action = ConfigManager.shared.effectiveAction(for: .click)
+        if isMacro {
+            let timer = DispatchSource.makeTimerSource(queue: .main)
+            timer.schedule(deadline: .now() + (windowDurationMs / 1000.0))
+            timer.setEventHandler { [weak self] in
+                guard let self = self, self.isTriggerEngaged else { return }
                 if !self.gestureConsumed {
-                    self.onCalibrationEvent?(.gestureCompleted(wasClick: true, action))
+                    Log.info("Click detected on magic thumb button macro (stationary tap)")
+                    let action = ConfigManager.shared.effectiveAction(for: .click)
+                    ActionDispatcher.shared.dispatch(action: action)
                 }
-                self.onCalibrationEvent?(.triggerState(isDown: false, buttonIndex: 5))
-            } else if !self.gestureConsumed {
-                Log.info("Click detected on magic thumb button (stationary tap)")
-                let action = ConfigManager.shared.effectiveAction(for: .click)
-                ActionDispatcher.shared.dispatch(action: action)
+                self.isTriggerEngaged = false
+                self.accumulatedDeltaX = 0.0
+                self.accumulatedDeltaY = 0.0
+                self.gestureConsumed = false
+                self.onEngagementChanged?(false)
             }
-            self.isTriggerEngaged = false
-            self.accumulatedDeltaX = 0.0
-            self.accumulatedDeltaY = 0.0
-            self.gestureConsumed = false
-            self.onEngagementChanged?(false)
+            timer.resume()
+            self.magicGestureTimer = timer
+        } else {
+            // For physical HID++ button, we have physical release via handleMagicUp().
+            // Keep a generous safety watchdog (5.0s) only to prevent stuck state if a Bluetooth packet is lost.
+            let timer = DispatchSource.makeTimerSource(queue: .main)
+            timer.schedule(deadline: .now() + 5.0)
+            timer.setEventHandler { [weak self] in
+                guard let self = self, self.isTriggerEngaged else { return }
+                Log.info("Physical trigger safety watchdog expired. Resetting engagement.")
+                self.reset()
+            }
+            timer.resume()
+            self.magicGestureTimer = timer
         }
-        timer.resume()
-        self.magicGestureTimer = timer
         return true
     }
 
     public func handleMagicUp() -> Bool {
+        let triggerIndex = Int(ConfigManager.shared.activeConfig.triggerButtonIndex)
+
         guard isTriggerEngaged else {
             if isCalibrationMode {
-                onCalibrationEvent?(.triggerState(isDown: false, buttonIndex: 5))
+                onCalibrationEvent?(.triggerState(isDown: false, buttonIndex: triggerIndex))
             }
             return true
         }
@@ -102,7 +113,7 @@ public final class GestureStateMachine {
                 action = actionForDirection(dir)
                 onCalibrationEvent?(.gestureCompleted(wasClick: false, action))
             }
-            onCalibrationEvent?(.triggerState(isDown: false, buttonIndex: 5))
+            onCalibrationEvent?(.triggerState(isDown: false, buttonIndex: triggerIndex))
             isTriggerEngaged = false
             accumulatedDeltaX = 0.0
             accumulatedDeltaY = 0.0
@@ -135,12 +146,13 @@ public final class GestureStateMachine {
 
         if isCalibrationMode {
             onCalibrationEvent?(.triggerState(isDown: true, buttonIndex: Int(buttonNumber)))
+            return true
         }
 
         // Safety watchdog: Automatically release if button-up is dropped or lost
         buttonSafetyTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + 1.5)
+        timer.schedule(deadline: .now() + 5.0)
         timer.setEventHandler { [weak self] in
             guard let self = self, self.isTriggerEngaged else { return }
             Log.info("Trigger button safety watchdog expired. Resetting engagement.")
@@ -161,23 +173,13 @@ public final class GestureStateMachine {
 
         if isCalibrationMode {
             onCalibrationEvent?(.motionUpdated(dx: accumulatedDeltaX, dy: accumulatedDeltaY, distance: distance))
-            if distance >= config.thresholdDistance && !gestureConsumed {
+            if distance >= config.thresholdDistance {
                 gestureConsumed = true
-                magicGestureTimer?.cancel()
-                magicGestureTimer = nil
-                buttonSafetyTimer?.cancel()
-                buttonSafetyTimer = nil
                 let dir = resolveDirection(dx: accumulatedDeltaX, dy: accumulatedDeltaY)
                 let action = actionForDirection(dir)
                 onCalibrationEvent?(.directionDetected(dir, action))
-                onCalibrationEvent?(.gestureCompleted(wasClick: false, action))
-                // Cleanly disengage motion tracking once calibration gesture is triggered
-                isTriggerEngaged = false
-                accumulatedDeltaX = 0.0
-                accumulatedDeltaY = 0.0
-                gestureConsumed = false
-                onEngagementChanged?(false)
-                onCalibrationEvent?(.triggerState(isDown: false, buttonIndex: Int(config.triggerButtonIndex)))
+            } else {
+                onCalibrationEvent?(.directionDetected(nil, nil))
             }
             return true
         }

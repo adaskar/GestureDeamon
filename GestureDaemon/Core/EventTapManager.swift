@@ -92,8 +92,7 @@ public final class EventTapManager {
     public func handleHIDPlusPlusGesture(pressed: Bool) {
         if isPaused { return }
         if pressed {
-            let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 75.0
-            _ = stateMachine.handleMagicDown(windowDurationMs: windowMs)
+            _ = stateMachine.handleMagicDown(isMacro: false)
         } else {
             _ = stateMachine.handleMagicUp()
         }
@@ -289,7 +288,7 @@ public final class EventTapManager {
 
                 if !isPaused {
                     let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 200.0
-                    _ = stateMachine.handleMagicDown(windowDurationMs: windowMs)
+                    _ = stateMachine.handleMagicDown(isMacro: true, windowDurationMs: windowMs)
                 }
                 clearSystemModifiers()
                 return nil // ALWAYS SWALLOW Tab key completely (even if paused, prevents VS Code focus stealing)
@@ -331,75 +330,79 @@ public final class EventTapManager {
         let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
         let config = ConfigManager.shared.activeConfig
 
-        // 3. Side Navigation Buttons (Back & Forward)
-        if config.enableSideButtons ?? true {
+        // In Calibration Mode (Live Tester), intercept all non-trigger buttons for live testing
+        if isCalibrationMode && buttonNumber != config.triggerButtonIndex {
             let backIndex = config.backButtonIndex ?? 3
             let forwardIndex = config.forwardButtonIndex ?? 4
 
-            if buttonNumber != config.triggerButtonIndex {
-                if buttonNumber == backIndex {
-                    if isCalibrationMode {
-                        if type == .otherMouseDown {
-                            let action = ConfigManager.shared.effectiveAction(for: .backButton)
-                            let label = action?.comment ?? "Universal Back (⌘[)"
-                            onCalibrationEvent?(.otherButton(buttonIndex: Int(backIndex), isDown: true, actionName: label))
-                        } else if type == .otherMouseUp {
-                            onCalibrationEvent?(.otherButton(buttonIndex: Int(backIndex), isDown: false, actionName: nil))
-                        }
-                        return nil // Swallow in calibration mode without dispatching to system
-                    }
+            if buttonNumber == backIndex {
+                if type == .otherMouseDown {
+                    let action = ConfigManager.shared.effectiveAction(for: .backButton)
+                    let label = action?.comment ?? "Universal Back (⌘[)"
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(backIndex), isDown: true, actionName: label))
+                } else if type == .otherMouseUp {
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(backIndex), isDown: false, actionName: nil))
+                }
+                return nil
+            } else if buttonNumber == forwardIndex {
+                if type == .otherMouseDown {
+                    let action = ConfigManager.shared.effectiveAction(for: .forwardButton)
+                    let label = action?.comment ?? "Universal Forward (⌘])"
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(forwardIndex), isDown: true, actionName: label))
+                } else if type == .otherMouseUp {
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(forwardIndex), isDown: false, actionName: nil))
+                }
+                return nil
+            } else {
+                let label = buttonNumber == 2 ? "Middle Click" : "Button \(buttonNumber)"
+                if type == .otherMouseDown {
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(buttonNumber), isDown: true, actionName: label))
+                } else if type == .otherMouseUp {
+                    onCalibrationEvent?(.otherButton(buttonIndex: Int(buttonNumber), isDown: false, actionName: nil))
+                }
+                return nil
+            }
+        }
 
-                    if type == .otherMouseDown {
-                        let frontApp = NSWorkspace.shared.frontmostApplication
-                        let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
-                        let appName = frontApp?.localizedName ?? "UNKNOWN"
-                        let pid = frontApp?.processIdentifier ?? 0
-                        let customAction = ConfigManager.shared.effectiveAction(for: .backButton)
+        // 3. Side Navigation Buttons (Back & Forward) in normal operation
+        if (config.enableSideButtons ?? true) && buttonNumber != config.triggerButtonIndex {
+            let backIndex = config.backButtonIndex ?? 3
+            let forwardIndex = config.forwardButtonIndex ?? 4
 
-                        Log.info("🖱️ [BACK BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+[)")")
+            if buttonNumber == backIndex {
+                if type == .otherMouseDown {
+                    let frontApp = NSWorkspace.shared.frontmostApplication
+                    let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
+                    let appName = frontApp?.localizedName ?? "UNKNOWN"
+                    let pid = frontApp?.processIdentifier ?? 0
+                    let customAction = ConfigManager.shared.effectiveAction(for: .backButton)
 
-                        if let action = customAction {
-                            ActionDispatcher.shared.dispatch(action: action)
-                        } else {
-                            ActionDispatcher.shared.dispatchNavigationBack()
-                        }
-                    }
-                    return nil // Swallow down, up, and drag for side navigation button
-                } else if buttonNumber == forwardIndex {
-                    if isCalibrationMode {
-                        if type == .otherMouseDown {
-                            let action = ConfigManager.shared.effectiveAction(for: .forwardButton)
-                            let label = action?.comment ?? "Universal Forward (⌘])"
-                            onCalibrationEvent?(.otherButton(buttonIndex: Int(forwardIndex), isDown: true, actionName: label))
-                        } else if type == .otherMouseUp {
-                            onCalibrationEvent?(.otherButton(buttonIndex: Int(forwardIndex), isDown: false, actionName: nil))
-                        }
-                        return nil // Swallow in calibration mode without dispatching to system
-                    }
+                    Log.info("🖱️ [BACK BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+[)")")
 
-                    if type == .otherMouseDown {
-                        let frontApp = NSWorkspace.shared.frontmostApplication
-                        let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
-                        let appName = frontApp?.localizedName ?? "UNKNOWN"
-                        let pid = frontApp?.processIdentifier ?? 0
-                        let customAction = ConfigManager.shared.effectiveAction(for: .forwardButton)
-
-                        Log.info("🖱️ [FORWARD BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+])")")
-
-                        if let action = customAction {
-                            ActionDispatcher.shared.dispatch(action: action)
-                        } else {
-                            ActionDispatcher.shared.dispatchNavigationForward()
-                        }
-                    }
-                    return nil // Swallow down, up, and drag for side navigation button
-                } else if isCalibrationMode {
-                    if type == .otherMouseDown {
-                        onCalibrationEvent?(.otherButton(buttonIndex: Int(buttonNumber), isDown: true, actionName: "Button \(buttonNumber)"))
-                    } else if type == .otherMouseUp {
-                        onCalibrationEvent?(.otherButton(buttonIndex: Int(buttonNumber), isDown: false, actionName: nil))
+                    if let action = customAction {
+                        ActionDispatcher.shared.dispatch(action: action)
+                    } else {
+                        ActionDispatcher.shared.dispatchNavigationBack()
                     }
                 }
+                return nil // Swallow down, up, and drag for side navigation button
+            } else if buttonNumber == forwardIndex {
+                if type == .otherMouseDown {
+                    let frontApp = NSWorkspace.shared.frontmostApplication
+                    let bundleId = frontApp?.bundleIdentifier ?? "UNKNOWN"
+                    let appName = frontApp?.localizedName ?? "UNKNOWN"
+                    let pid = frontApp?.processIdentifier ?? 0
+                    let customAction = ConfigManager.shared.effectiveAction(for: .forwardButton)
+
+                    Log.info("🖱️ [FORWARD BUTTON] Clicked (Button \(buttonNumber)). Frontmost: '\(appName)' (\(bundleId), PID: \(pid)). Action: \(customAction != nil ? "Profile Override (KeyCode: \(customAction?.keyCode ?? 0), Mods: \(customAction?.modifiers ?? []))" : "Universal Default (Cmd+])")")
+
+                    if let action = customAction {
+                        ActionDispatcher.shared.dispatch(action: action)
+                    } else {
+                        ActionDispatcher.shared.dispatchNavigationForward()
+                    }
+                }
+                return nil // Swallow down, up, and drag for side navigation button
             }
         }
 

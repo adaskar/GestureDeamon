@@ -341,21 +341,28 @@ public struct LiveTesterView: View {
             dragOffset = CGSize(width: dx, height: dy)
 
         case .directionDetected(let direction, let action):
-            let dirStr: String
-            switch direction {
-            case .left: dirStr = "LEFT"
-            case .right: dirStr = "RIGHT"
-            case .up: dirStr = "UP"
-            case .down: dirStr = "DOWN"
+            if let direction = direction {
+                let dirStr: String
+                switch direction {
+                case .left: dirStr = "LEFT"
+                case .right: dirStr = "RIGHT"
+                case .up: dirStr = "UP"
+                case .down: dirStr = "DOWN"
+                }
+                detectedDirection = dirStr
+                let actionDesc = action?.comment ?? "Swipe \(dirStr)"
+                lastFiredActionDescription = "Detected: Swipe \(dirStr) (\(actionDesc))"
+            } else {
+                detectedDirection = nil
             }
-            detectedDirection = dirStr
-            let actionDesc = action?.comment ?? "Swipe \(dirStr)"
-            lastFiredActionDescription = "Detected: Swipe \(dirStr) (\(actionDesc))"
 
         case .gestureCompleted(let wasClick, let action):
             if wasClick {
                 let actionDesc = action?.comment ?? "Thumb Click"
                 lastFiredActionDescription = "Detected: Thumb Click (\(actionDesc))"
+            } else if let dir = detectedDirection {
+                let actionDesc = action?.comment ?? "Swipe \(dir)"
+                lastFiredActionDescription = "Detected: Swipe \(dir) (\(actionDesc))"
             }
 
         case .otherButton(let buttonIndex, let isDown, let actionName):
