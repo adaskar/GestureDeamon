@@ -141,25 +141,6 @@ public final class HIDPlusPlusManager {
 
         Log.info("⚡️ Logitech Device detected: '\(productName)' over \(transport.rawValue)")
 
-        // ── Always-on device identity diagnostic ──────────────────────────────────
-        // Print the full IOKit identity of every matched device so we can confirm
-        // we are opening the HID++ logical interface and NOT the composite BLE device
-        // (which would deliver standard mouse-movement reports to our callback).
-        let primaryPage = (IOHIDDeviceGetProperty(device, kIOHIDPrimaryUsagePageKey as CFString) as? Int) ?? -1
-        let primaryUsage = (IOHIDDeviceGetProperty(device, kIOHIDPrimaryUsageKey as CFString) as? Int) ?? -1
-        let usagePairs = IOHIDDeviceGetProperty(device, kIOHIDDeviceUsagePairsKey as CFString)
-        let vendorID = (IOHIDDeviceGetProperty(device, kIOHIDVendorIDKey as CFString) as? Int) ?? -1
-        let productID = (IOHIDDeviceGetProperty(device, kIOHIDProductIDKey as CFString) as? Int) ?? -1
-        print("""
-[HID-DIAG] Device matched: '\(productName)'
-           transport=\(transportStr)
-           vendorID=0x\(String(format: "%04X", vendorID))  productID=0x\(String(format: "%04X", productID))
-           primaryUsagePage=0x\(String(format: "%04X", primaryPage))  primaryUsage=0x\(String(format: "%04X", primaryUsage))
-           DeviceUsagePairs=\(usagePairs ?? "nil" as AnyObject)
-""")
-        fflush(stdout)
-        // ─────────────────────────────────────────────────────────────────────────
-
         // Schedule device on the current (main) run loop.
         // For USB: receiver only sends infrequent HID++ frames.
         // For BLE: InputValueMatching filters out all mouse movement at the kernel driver level,
@@ -218,7 +199,6 @@ public final class HIDPlusPlusManager {
                     context
                 )
 
-                startDiagRateTimer()
                 discoverBLEFeatures(device)
             }
         } else if openResult == -536870174 { // 0xe00002e2 = kIOReturnNotPermitted
@@ -242,7 +222,6 @@ public final class HIDPlusPlusManager {
             self.connectedTransport = nil
             self.isDeviceOpen = false
             self.reprogFeatureIndex = nil
-            stopDiagRateTimer()
         }
     }
 
@@ -414,10 +393,7 @@ public final class HIDPlusPlusManager {
             return
         }
 
-        diagReportCounts[reportId, default: 0] += 1
-
-        print("[HID-DIAG] 📥 BLE InputValue matched: ReportID=0x\(String(format: "%02X", reportId)), len=\(length)")
-        fflush(stdout)
+        Log.debug("📥 BLE InputValue matched: ReportID=0x\(String(format: "%02X", reportId)), len=\(length)")
 
         var bytes: [UInt8]
         if ptr[0] == reportId && length >= 20 {
@@ -434,8 +410,6 @@ public final class HIDPlusPlusManager {
         guard length >= 7 else { return }
         let reportId = report[0]
 
-        // Diagnostic counter — serialized on the same queue as the 1-second summary timer.
-        diagReportCounts[reportId, default: 0] += 1
 
         // Fast-exit for all non-HID++ reports.
         // For BLE composite devices this discards 125 Hz mouse-movement frames with zero
