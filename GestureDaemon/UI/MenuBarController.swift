@@ -85,20 +85,47 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     public func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
 
+        // Zero-CPU Lazy Battery Refresh on user menu open
+        HIDPlusPlusManager.shared.refreshBatteryStatus()
+
         // Status Header
-        let statusTitle = isPaused ? "GestureDaemon: Paused" : "GestureDaemon: Active"
+        let statusTitle = isPaused ? "GestureDaemon (Paused)" : "GestureDaemon"
         let statusItemHeader = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
+        statusItemHeader.image = NSImage(systemSymbolName: isPaused ? "pause.circle.fill" : "checkmark.circle.fill", accessibilityDescription: nil)
         statusItemHeader.isEnabled = false
         menu.addItem(statusItemHeader)
 
-        // Connected Device Info
-        if let devName = HIDPlusPlusManager.shared.connectedDeviceName,
-           let transport = HIDPlusPlusManager.shared.connectedTransport {
-            let devItem = NSMenuItem(title: "🖱️ \(devName) (\(transport.rawValue))", action: nil, keyEquivalent: "")
+        // Connected Device Info with battery & icon
+        if let devName = HIDPlusPlusManager.shared.connectedDeviceName {
+            var devTitle = devName
+            if let battery = HIDPlusPlusManager.shared.batteryInfo {
+                let chargeStr = battery.isCharging ? " ⚡" : ""
+                devTitle += "  ·  \(battery.percentage)%\(chargeStr)"
+            }
+            let devItem = NSMenuItem(title: devTitle, action: nil, keyEquivalent: "")
+
+            let iconName: String
+            if let battery = HIDPlusPlusManager.shared.batteryInfo {
+                if battery.isCharging {
+                    iconName = "battery.100.bolt"
+                } else {
+                    switch battery.percentage {
+                    case 85...100: iconName = "battery.100"
+                    case 60..<85:  iconName = "battery.75"
+                    case 35..<60:  iconName = "battery.50"
+                    case 15..<35:  iconName = "battery.25"
+                    default:       iconName = "battery.0"
+                    }
+                }
+            } else {
+                iconName = "computermouse.fill"
+            }
+            devItem.image = NSImage(systemSymbolName: iconName, accessibilityDescription: nil)
             devItem.isEnabled = false
             menu.addItem(devItem)
         } else {
-            let devItem = NSMenuItem(title: "🖱️ Scanning for Logitech Hardware...", action: nil, keyEquivalent: "")
+            let devItem = NSMenuItem(title: "Searching...", action: nil, keyEquivalent: "")
+            devItem.image = NSImage(systemSymbolName: "computermouse", accessibilityDescription: nil)
             devItem.isEnabled = false
             menu.addItem(devItem)
         }
@@ -108,14 +135,17 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         // Show/Hide Menu Bar Icon Options
         if isTemporarilyVisible {
             let keepItem = NSMenuItem(title: "Keep Menu Bar Icon Visible", action: #selector(keepMenuBarIconVisible), keyEquivalent: "")
+            keepItem.image = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)
             keepItem.target = self
             menu.addItem(keepItem)
 
             let rehideItem = NSMenuItem(title: "Hide Menu Bar Icon Again", action: #selector(rehideTemporarilyShownIcon), keyEquivalent: "")
+            rehideItem.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil)
             rehideItem.target = self
             menu.addItem(rehideItem)
         } else {
             let hideItem = NSMenuItem(title: "Hide Menu Bar Icon", action: #selector(hideMenuBarIcon), keyEquivalent: "")
+            hideItem.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil)
             hideItem.target = self
             menu.addItem(hideItem)
         }
@@ -125,17 +155,20 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         // Pause / Resume Toggle
         let toggleTitle = isPaused ? "Resume Gestures" : "Pause Gestures"
         let toggleItem = NSMenuItem(title: toggleTitle, action: #selector(togglePause), keyEquivalent: "p")
+        toggleItem.image = NSImage(systemSymbolName: isPaused ? "play.fill" : "pause.fill", accessibilityDescription: nil)
         toggleItem.target = self
         menu.addItem(toggleItem)
 
         // Launch at Login
         let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        loginItem.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
         loginItem.target = self
         loginItem.state = LoginItemManager.shared.isLaunchAtLoginEnabled ? .on : .off
         menu.addItem(loginItem)
 
         // Preferences Window
         let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
+        prefsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
         prefsItem.target = self
         menu.addItem(prefsItem)
 
@@ -146,12 +179,14 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         if !axGranted || !imGranted {
             menu.addItem(NSMenuItem.separator())
             if !axGranted {
-                let axItem = NSMenuItem(title: "⚠️ Accessibility: Missing (Authorize)", action: #selector(checkAccessibility), keyEquivalent: "")
+                let axItem = NSMenuItem(title: "Accessibility: Missing (Authorize)", action: #selector(checkAccessibility), keyEquivalent: "")
+                axItem.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)
                 axItem.target = self
                 menu.addItem(axItem)
             }
             if !imGranted {
-                let imItem = NSMenuItem(title: "⚠️ Input Monitoring: Missing (Authorize for BLE)", action: #selector(checkInputMonitoring), keyEquivalent: "")
+                let imItem = NSMenuItem(title: "Input Monitoring: Missing (Authorize)", action: #selector(checkInputMonitoring), keyEquivalent: "")
+                imItem.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)
                 imItem.target = self
                 menu.addItem(imItem)
             }
@@ -161,6 +196,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
 
         // Quit
         let quitItem = NSMenuItem(title: "Quit GestureDaemon", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         quitItem.target = self
         menu.addItem(quitItem)
     }

@@ -2,6 +2,12 @@ import Foundation
 import IOKit
 import IOKit.hid
 
+extension Notification.Name {
+    public static let hidBatteryStatusDidChange = Notification.Name("hidBatteryStatusDidChange")
+    public static let hidHardwareCapabilitiesDidChange = Notification.Name("hidHardwareCapabilitiesDidChange")
+    public static let hidDpiDidChange = Notification.Name("hidDpiDidChange")
+}
+
 public final class HIDPlusPlusManager {
     public static let shared = HIDPlusPlusManager()
 
@@ -10,15 +16,52 @@ public final class HIDPlusPlusManager {
         case bluetoothLE = "Bluetooth Low Energy"
     }
 
+    public struct BatteryInfo: Equatable {
+        public let percentage: Int
+        public let isCharging: Bool
+
+        public init(percentage: Int, isCharging: Bool) {
+            self.percentage = percentage
+            self.isCharging = isCharging
+        }
+    }
+
+    private enum FeatureQueryId: UInt8 {
+        case reprogControls = 0x01       // 0x1B04
+        case unifiedBattery = 0x02       // 0x1004
+        case batteryStatus = 0x03        // 0x1000
+        case smartShiftEnhanced = 0x04   // 0x2111
+        case smartShift = 0x05           // 0x2110
+        case adjustableDpi = 0x06        // 0x2201
+    }
+
     public private(set) var connectedDeviceName: String?
     public private(set) var connectedTransport: TransportType?
     public private(set) var isDeviceOpen = false
+    public private(set) var batteryInfo: BatteryInfo?
+    public private(set) var currentDpi: Int?
+
+    public var isSmartShiftSupported: Bool {
+        activeManagedDevice?.smartShiftFeatureIndex != nil
+    }
+    public var isDpiSupported: Bool {
+        activeManagedDevice?.dpiFeatureIndex != nil
+    }
+    public var isBatterySupported: Bool {
+        activeManagedDevice?.batteryFeatureIndex != nil
+    }
 
     private final class ManagedDevice {
         let device: IOHIDDevice
         let name: String
         let transport: TransportType
+        var deviceIndex: UInt8 = 0xFF
         var reprogFeatureIndex: UInt8?
+        var batteryFeatureIndex: UInt8?
+        var isUnifiedBattery: Bool = false
+        var smartShiftFeatureIndex: UInt8?
+        var dpiFeatureIndex: UInt8?
+        var currentDpi: Int?
         var isOpen: Bool = false
         let reportBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 64)
 
@@ -26,6 +69,7 @@ public final class HIDPlusPlusManager {
             self.device = device
             self.name = name
             self.transport = transport
+            self.deviceIndex = (transport == .usb) ? 0x01 : 0xFF
         }
 
         deinit {
@@ -38,11 +82,13 @@ public final class HIDPlusPlusManager {
     private var managedDevices: [IOHIDDevice: ManagedDevice] = [:]
     private var isStarted = false
 
+    private var activeManagedDevice: ManagedDevice? {
+        guard let dev = activeDevice else { return nil }
+        return managedDevices[dev]
+    }
+
     // Cached HID++ 2.0 feature indices
     private var reprogFeatureIndex: UInt8?
-
-
-
 
     // Gesture Button Component IDs (Logitech specification)
     // 0x00D7: Gesture Button on M720 Triathlon (Task 0x00B4)
@@ -61,18 +107,8 @@ public final class HIDPlusPlusManager {
         self.hidManager = manager
 
         // Match BOTH USB Receivers (0xFF00) and Direct Bluetooth Low Energy (0xFF43:0x0202).
-        //
-        // IMPORTANT — BLE matching must pin the Usage value (0x0202) in addition to the
-        // Usage Page (0xFF43).  Without it:
-        //   • kIOHIDPrimaryUsagePageKey alone matches any top-level HID collection whose
-        //     primary usage page happens to be 0xFF43 — correct for HID++ only interfaces.
-        //   • kIOHIDDeviceUsagePageKey alone matches any IOHIDDevice whose DeviceUsagePairs
-        //     array contains 0xFF43 — this can match the COMPOSITE BLE device that bundles
-        //     {0x0001/Mouse, 0xFF43/HID++, …} in one object.  Opening that composite device
-        //     and registering an input-report callback on it delivers every mouse-movement
-        //     report (125+ Hz) to handleInputReport, causing ~0.5% CPU even though the
-        //     callback itself is fast — the IOKit Mach-IPC wakeup cost dominates.
-        // Pinning Usage 0x0202 restricts the match to the exact HID++ logical interface only.
+        // Pinning Usage 0x0202 restricts the match to the exact HID++ logical interface only,
+        // avoiding waking on standard 125 Hz mouse-movement reports.
         let matchingCriteria: [[String: Any]] = [
             // 1. USB Unifying & Bolt Receivers (vendor-specific usage page 0xFF00)
             [
@@ -86,7 +122,6 @@ public final class HIDPlusPlusManager {
                 kIOHIDPrimaryUsageKey as String: 0x0202
             ],
             // 3. Direct BLE — device that carries 0xFF43:0x0202 in its DeviceUsagePairs
-            //    (some Logitech firmware exposes HID++ as a secondary collection)
             [
                 kIOHIDVendorIDKey as String: 0x046d,
                 kIOHIDDeviceUsagePageKey as String: 0xff43,
@@ -120,10 +155,19 @@ public final class HIDPlusPlusManager {
         } else {
             Log.error("Failed to open IOHIDManager (status \(res)).")
         }
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleConfigDidChange(_:)),
+            name: ConfigManager.configDidChangeNotification,
+            object: nil
+        )
     }
 
     public func stop() {
         guard isStarted, let manager = hidManager else { return }
+        NotificationCenter.default.removeObserver(self, name: ConfigManager.configDidChangeNotification, object: nil)
+
         for (dev, _) in managedDevices {
             IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
             IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -138,6 +182,8 @@ public final class HIDPlusPlusManager {
         self.connectedTransport = nil
         self.isDeviceOpen = false
         self.reprogFeatureIndex = nil
+        self.batteryInfo = nil
+        self.currentDpi = nil
         Log.info("HID++ Manager stopped.")
     }
 
@@ -148,6 +194,7 @@ public final class HIDPlusPlusManager {
             self.connectedDeviceName = ble.name
             self.connectedTransport = .bluetoothLE
             self.reprogFeatureIndex = ble.reprogFeatureIndex
+            self.currentDpi = ble.currentDpi
             self.isDeviceOpen = true
             return
         }
@@ -158,6 +205,7 @@ public final class HIDPlusPlusManager {
             self.connectedDeviceName = usb.name
             self.connectedTransport = .usb
             self.reprogFeatureIndex = usb.reprogFeatureIndex
+            self.currentDpi = usb.currentDpi
             self.isDeviceOpen = true
             return
         }
@@ -166,6 +214,8 @@ public final class HIDPlusPlusManager {
         self.connectedDeviceName = nil
         self.connectedTransport = nil
         self.reprogFeatureIndex = nil
+        self.batteryInfo = nil
+        self.currentDpi = nil
         self.isDeviceOpen = false
     }
 
@@ -208,8 +258,8 @@ public final class HIDPlusPlusManager {
                     context
                 )
                 enableReceiverNotifications(device)
-                queryFeature(device: device, featureId: 0x1B04, deviceIndex: 0x01)
-                queryFeature(device: device, featureId: 0x1B04, deviceIndex: 0xFF)
+                discoverUSBFeatures(device, deviceIndex: 0x01)
+                discoverUSBFeatures(device, deviceIndex: 0xFF)
 
             case .bluetoothLE:
                 let matchingCriteria: [[String: Any]] = [
@@ -234,6 +284,7 @@ public final class HIDPlusPlusManager {
             }
 
             updateActiveDevice()
+            NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
         } else if openResult == -536870174 { // 0xe00002e2 = kIOReturnNotPermitted
             Log.error("⚠️ Cannot open Bluetooth HID++ channel on '\(productName)': Input Monitoring permission missing.")
             PermissionHelper.requestInputMonitoring()
@@ -253,12 +304,16 @@ public final class HIDPlusPlusManager {
         self.isGestureButtonPressed = false
         updateActiveDevice()
 
+        NotificationCenter.default.post(name: .hidBatteryStatusDidChange, object: nil)
+        NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
+        NotificationCenter.default.post(name: .hidDpiDidChange, object: nil)
+
         if let active = self.activeDevice, let current = managedDevices[active] {
             Log.info("⚡️ Switched active HID++ device to '\(current.name)' over \(current.transport.rawValue)")
             if current.transport == .usb {
                 enableReceiverNotifications(active)
-                queryFeature(device: active, featureId: 0x1B04, deviceIndex: 0x01)
-                queryFeature(device: active, featureId: 0x1B04, deviceIndex: 0xFF)
+                discoverUSBFeatures(active, deviceIndex: 0x01)
+                discoverUSBFeatures(active, deviceIndex: 0xFF)
             } else if current.transport == .bluetoothLE {
                 discoverBLEFeatures(active)
             }
@@ -269,9 +324,6 @@ public final class HIDPlusPlusManager {
             }
         }
     }
-
-
-
 
     // MARK: - Sleep & Wake Recovery
     public func handleSleep() {
@@ -323,9 +375,9 @@ public final class HIDPlusPlusManager {
             case .usb:
                 enableReceiverNotifications(device)
                 for idx: UInt8 in 1...6 {
-                    queryFeature(device: device, featureId: 0x1B04, deviceIndex: idx)
+                    discoverUSBFeatures(device, deviceIndex: idx)
                 }
-                queryFeature(device: device, featureId: 0x1B04, deviceIndex: 0xFF)
+                discoverUSBFeatures(device, deviceIndex: 0xFF)
                 if let reprogIndex = managed.reprogFeatureIndex {
                     divertGestureButtons(device: device, featureIndex: reprogIndex, deviceIndex: 0xFF)
                     for idx: UInt8 in 1...6 {
@@ -334,6 +386,7 @@ public final class HIDPlusPlusManager {
                 }
             }
         }
+        applyConfiguredHardwareSettings()
     }
 
     public func restartMatching() {
@@ -348,26 +401,35 @@ public final class HIDPlusPlusManager {
         _ = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0x10, enableNotif, enableNotif.count)
     }
 
-    // MARK: - Bluetooth LE Feature Discovery & Diversion
+    // MARK: - Feature Discovery
     private func discoverBLEFeatures(_ device: IOHIDDevice) {
-        Log.info("Discovering HID++ 2.0 Reprogrammable Controls on Bluetooth device...")
-        // Query IRoot (Feature 0x0000) for Feature 0x1B04 (REPROG_CONTROLS_V4)
-        queryFeature(device: device, featureId: 0x1B04, deviceIndex: 0xFF)
+        Log.info("Discovering HID++ 2.0 features on Bluetooth device...")
+        queryFeature(device: device, featureId: 0x1B04, deviceIndex: 0xFF, queryId: .reprogControls)
+        queryFeature(device: device, featureId: 0x1004, deviceIndex: 0xFF, queryId: .unifiedBattery)
+        queryFeature(device: device, featureId: 0x2111, deviceIndex: 0xFF, queryId: .smartShiftEnhanced)
+        queryFeature(device: device, featureId: 0x2201, deviceIndex: 0xFF, queryId: .adjustableDpi)
     }
 
-    private func queryFeature(device: IOHIDDevice, featureId: UInt16, deviceIndex: UInt8) {
+    private func discoverUSBFeatures(_ device: IOHIDDevice, deviceIndex: UInt8) {
+        queryFeature(device: device, featureId: 0x1B04, deviceIndex: deviceIndex, queryId: .reprogControls)
+        queryFeature(device: device, featureId: 0x1004, deviceIndex: deviceIndex, queryId: .unifiedBattery)
+        queryFeature(device: device, featureId: 0x2111, deviceIndex: deviceIndex, queryId: .smartShiftEnhanced)
+        queryFeature(device: device, featureId: 0x2201, deviceIndex: deviceIndex, queryId: .adjustableDpi)
+    }
+
+    private func queryFeature(device: IOHIDDevice, featureId: UInt16, deviceIndex: UInt8, queryId: FeatureQueryId) {
         // HID++ 2.0 IRoot getFeature command:
         // Byte 0: 0x11 (Long Report ID)
         // Byte 1: deviceIndex (0xFF for direct BLE, 0x01..0x06 for receiver paired devices)
         // Byte 2: 0x00 (IRoot Feature Index)
-        // Byte 3: 0x00 (Function 0: getFeature)
+        // Byte 3: Function 0 (getFeature) tagged with queryId in lower 4 bits
         // Byte 4: Feature ID MSB
         // Byte 5: Feature ID LSB
         var report = [UInt8](repeating: 0x00, count: 20)
         report[0] = 0x11
         report[1] = deviceIndex
         report[2] = 0x00
-        report[3] = 0x00
+        report[3] = queryId.rawValue & 0x0F
         report[4] = UInt8((featureId >> 8) & 0xFF)
         report[5] = UInt8(featureId & 0xFF)
 
@@ -377,6 +439,96 @@ public final class HIDPlusPlusManager {
         }
     }
 
+    // MARK: - Battery Hardware Controls (Zero-Polling)
+    public func refreshBatteryStatus() {
+        guard let dev = activeDevice, let managed = managedDevices[dev] else { return }
+        requestBatteryStatus(device: dev, managed: managed, deviceIndex: managed.deviceIndex)
+    }
+
+    private func requestBatteryStatus(device: IOHIDDevice, managed: ManagedDevice, deviceIndex: UInt8) {
+        guard let featureIdx = managed.batteryFeatureIndex else { return }
+        var report = [UInt8](repeating: 0x00, count: 20)
+        report[0] = 0x11
+        report[1] = deviceIndex
+        report[2] = featureIdx
+        if managed.isUnifiedBattery {
+            report[3] = 0x10 // Function 1: getStatus
+        } else {
+            report[3] = 0x00 // Function 0: getBatteryLevelStatus
+        }
+        _ = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0x11, report, report.count)
+    }
+
+    // MARK: - SmartShift Hardware Controls
+    public func setSmartShift(enabled: Bool, threshold: Int) {
+        guard let dev = activeDevice, let managed = managedDevices[dev], let featureIdx = managed.smartShiftFeatureIndex else { return }
+        var report = [UInt8](repeating: 0x00, count: 20)
+        report[0] = 0x11
+        report[1] = managed.deviceIndex
+        report[2] = featureIdx
+        report[3] = 0x10 // Function 1: setSmartShift
+        report[4] = enabled ? 0x01 : 0x02 // 0x01 = Auto disengage (SmartShift enabled), 0x02 = Ratchet only
+        report[5] = UInt8(clamping: max(1, min(255, threshold)))
+
+        let res = IOHIDDeviceSetReport(dev, kIOHIDReportTypeOutput, 0x11, report, report.count)
+        if res == kIOReturnSuccess {
+            Log.info("⚙️ SmartShift updated: \(enabled ? "Auto" : "Ratchet") (threshold: \(threshold))")
+        } else {
+            Log.error("Failed to set SmartShift (status: \(res))")
+        }
+    }
+
+    // MARK: - Sensor DPI Hardware Controls
+    public func queryCurrentDpi() {
+        guard let dev = activeDevice, let managed = managedDevices[dev], let featureIdx = managed.dpiFeatureIndex else { return }
+        var report = [UInt8](repeating: 0x00, count: 20)
+        report[0] = 0x11
+        report[1] = managed.deviceIndex
+        report[2] = featureIdx
+        report[3] = 0x20 // Function 2: getSensorDpi
+        report[4] = 0x00 // Sensor 0
+        _ = IOHIDDeviceSetReport(dev, kIOHIDReportTypeOutput, 0x11, report, report.count)
+    }
+
+    public func setSensorDpi(dpi: Int) {
+        guard let dev = activeDevice, let managed = managedDevices[dev], let featureIdx = managed.dpiFeatureIndex else { return }
+        let clampedDpi = max(200, min(8000, dpi))
+        var report = [UInt8](repeating: 0x00, count: 20)
+        report[0] = 0x11
+        report[1] = managed.deviceIndex
+        report[2] = featureIdx
+        report[3] = 0x30 // Function 3: setSensorDpi
+        report[4] = 0x00 // Sensor 0
+        report[5] = UInt8((clampedDpi >> 8) & 0xFF)
+        report[6] = UInt8(clampedDpi & 0xFF)
+
+        let res = IOHIDDeviceSetReport(dev, kIOHIDReportTypeOutput, 0x11, report, report.count)
+        if res == kIOReturnSuccess {
+            self.currentDpi = clampedDpi
+            managed.currentDpi = clampedDpi
+            NotificationCenter.default.post(name: .hidDpiDidChange, object: clampedDpi)
+            Log.info("🎯 Optical Sensor DPI set to \(clampedDpi)")
+        } else {
+            Log.error("Failed to set sensor DPI to \(clampedDpi) (status: \(res))")
+        }
+    }
+
+    public func applyConfiguredHardwareSettings() {
+        let config = ConfigManager.shared.activeConfig
+        if let enabled = config.smartShiftEnabled {
+            let threshold = config.smartShiftThreshold ?? 20
+            setSmartShift(enabled: enabled, threshold: threshold)
+        }
+        if let dpi = config.sensorDpi {
+            setSensorDpi(dpi: dpi)
+        }
+    }
+
+    @objc private func handleConfigDidChange(_ notification: Notification) {
+        applyConfiguredHardwareSettings()
+    }
+
+    // MARK: - Gesture Diversion
     private var isGestureButtonPressed = false
 
     private func divertGestureButtons(device: IOHIDDevice, featureIndex: UInt8, deviceIndex: UInt8) {
@@ -417,13 +569,13 @@ public final class HIDPlusPlusManager {
     // MARK: - Incoming Report / Value Processing
 
     /// Input value callback for Bluetooth LE devices.
-    ///
-    /// By using IOHIDDeviceSetInputValueMatchingMultiple(device, ...) with Report IDs 0x11 and 0x10,
-    /// the kernel driver filters out standard mouse-movement reports (Report ID 0x02) at the driver
-    /// level. This callback ONLY fires when an actual HID++ frame arrives, resulting in 0 Mach IPC
-    /// messages while moving the mouse and a rock-solid 0.0% CPU footprint!
+    /// Filters out mouse-movement reports at driver level (0 Mach IPC msgs, 0.0% CPU).
     private func handleInputValue(device: IOHIDDevice?, value: IOHIDValue) {
         let elem = IOHIDValueGetElement(value)
+        let elemType = IOHIDElementGetType(elem)
+        // Discard any output elements looped back by macOS
+        guard elemType != kIOHIDElementTypeOutput else { return }
+
         let reportId = UInt8(IOHIDElementGetReportID(elem))
         let length = IOHIDValueGetLength(value)
         guard length > 0 else { return }
@@ -453,15 +605,10 @@ public final class HIDPlusPlusManager {
         let reportId = report[0]
 
         // Fast-exit for all non-HID++ reports.
-        // For BLE composite devices this discards 125 Hz mouse-movement frames with zero
-        // main-thread interaction — no Mach IPC wakeup on the main run loop.
         guard reportId == 0x11 || reportId == 0x10 else { return }
 
-        // Copy the relevant bytes while the raw pointer is still valid on this queue.
         let bytes = Array(UnsafeBufferPointer(start: report, count: length))
 
-        // If already on the main thread (standard when scheduled on the main run loop),
-        // process immediately to eliminate dispatch scheduling latency.
         if Thread.isMainThread {
             processHIDPlusPlusReport(fromDevice: device, bytes: bytes)
         } else {
@@ -491,6 +638,7 @@ public final class HIDPlusPlusManager {
             self.connectedDeviceName = managed.name
             self.connectedTransport = managed.transport
             self.reprogFeatureIndex = managed.reprogFeatureIndex
+            self.currentDpi = managed.currentDpi
             self.isDeviceOpen = true
             Log.info("⚡️ Active device automatically switched to '\(managed.name)' (\(managed.transport.rawValue)) due to incoming traffic.")
         }
@@ -499,39 +647,161 @@ public final class HIDPlusPlusManager {
         if reportId == 0x11 && length >= 20 {
             let featureIndex = bytes[2]
             let functionOrEvent = bytes[3]
+            let fn = functionOrEvent >> 4
+            let swId = functionOrEvent & 0x0F
 
             // Response from IRoot (Feature 0x0000): Feature Discovery Echo
-            if featureIndex == 0x00 && functionOrEvent == 0x00 {
+            if featureIndex == 0x00 && fn == 0x00 {
+                guard let queryId = FeatureQueryId(rawValue: swId) else { return }
+                let managed = targetDevice.flatMap { managedDevices[$0] }
+                let expectedFeatureId: UInt16
+                switch queryId {
+                case .reprogControls: expectedFeatureId = 0x1B04
+                case .unifiedBattery: expectedFeatureId = 0x1004
+                case .batteryStatus: expectedFeatureId = 0x1000
+                case .smartShiftEnhanced: expectedFeatureId = 0x2111
+                case .smartShift: expectedFeatureId = 0x2110
+                case .adjustableDpi: expectedFeatureId = 0x2201
+                }
+
+                // Guard against reflected outgoing request frames (where bytes[4..5] echo the featureId)
+                if bytes.count >= 6 &&
+                   bytes[4] == UInt8((expectedFeatureId >> 8) & 0xFF) &&
+                   bytes[5] == UInt8(expectedFeatureId & 0xFF) {
+                    Log.debug("Ignoring reflected outgoing IRoot query for 0x\(String(format: "%04X", expectedFeatureId))")
+                    return
+                }
+
                 let resolvedFeatureIndex = bytes[4]
-                if resolvedFeatureIndex > 0 {
-                    if let dev = targetDevice, let managed = managedDevices[dev] {
-                        managed.reprogFeatureIndex = resolvedFeatureIndex
+
+                switch queryId {
+                case .reprogControls:
+                    if resolvedFeatureIndex > 0 {
+                        managed?.reprogFeatureIndex = resolvedFeatureIndex
+                        self.reprogFeatureIndex = resolvedFeatureIndex
+                        Log.info("Resolved Reprogrammable Controls (0x1B04) at index 0x\(String(format: "%02X", resolvedFeatureIndex)) on deviceIndex 0x\(String(format: "%02X", deviceIndex))")
+                        if let dev = targetDevice {
+                            divertGestureButtons(device: dev, featureIndex: resolvedFeatureIndex, deviceIndex: deviceIndex)
+                        }
                     }
-                    self.reprogFeatureIndex = resolvedFeatureIndex
-                    Log.info("Resolved Reprogrammable Controls (Feature 0x1B04) at index 0x\(String(format: "%02X", resolvedFeatureIndex)) on deviceIndex 0x\(String(format: "%02X", deviceIndex))")
-                    if let dev = targetDevice {
-                        divertGestureButtons(device: dev, featureIndex: resolvedFeatureIndex, deviceIndex: deviceIndex)
+                case .unifiedBattery:
+                    if resolvedFeatureIndex > 0 {
+                        managed?.batteryFeatureIndex = resolvedFeatureIndex
+                        managed?.isUnifiedBattery = true
+                        Log.info("Resolved Unified Battery (0x1004) at index 0x\(String(format: "%02X", resolvedFeatureIndex)) on deviceIndex 0x\(String(format: "%02X", deviceIndex))")
+                        if let dev = targetDevice, let m = managed {
+                            requestBatteryStatus(device: dev, managed: m, deviceIndex: deviceIndex)
+                        }
+                        NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
+                    } else if let dev = targetDevice {
+                        queryFeature(device: dev, featureId: 0x1000, deviceIndex: deviceIndex, queryId: .batteryStatus)
+                    }
+                case .batteryStatus:
+                    if resolvedFeatureIndex > 0 {
+                        managed?.batteryFeatureIndex = resolvedFeatureIndex
+                        managed?.isUnifiedBattery = false
+                        Log.info("Resolved Battery Status (0x1000) at index 0x\(String(format: "%02X", resolvedFeatureIndex)) on deviceIndex 0x\(String(format: "%02X", deviceIndex))")
+                        if let dev = targetDevice, let m = managed {
+                            requestBatteryStatus(device: dev, managed: m, deviceIndex: deviceIndex)
+                        }
+                        NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
+                    }
+                case .smartShiftEnhanced:
+                    if resolvedFeatureIndex > 0 {
+                        managed?.smartShiftFeatureIndex = resolvedFeatureIndex
+                        Log.info("Resolved SmartShift Enhanced (0x2111) at index 0x\(String(format: "%02X", resolvedFeatureIndex)) on deviceIndex 0x\(String(format: "%02X", deviceIndex))")
+                        applyConfiguredHardwareSettings()
+                        NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
+                    } else if let dev = targetDevice {
+                        managed?.smartShiftFeatureIndex = nil
+                        queryFeature(device: dev, featureId: 0x2110, deviceIndex: deviceIndex, queryId: .smartShift)
+                    }
+                case .smartShift:
+                    if resolvedFeatureIndex > 0 {
+                        managed?.smartShiftFeatureIndex = resolvedFeatureIndex
+                        Log.info("Resolved SmartShift (0x2110) at index 0x\(String(format: "%02X", resolvedFeatureIndex)) on deviceIndex 0x\(String(format: "%02X", deviceIndex))")
+                        applyConfiguredHardwareSettings()
+                        NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
+                    } else {
+                        managed?.smartShiftFeatureIndex = nil
+                        Log.info("SmartShift not supported on '\(managed?.name ?? "device")'.")
+                        NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
+                    }
+                case .adjustableDpi:
+                    if resolvedFeatureIndex > 0 {
+                        managed?.dpiFeatureIndex = resolvedFeatureIndex
+                        Log.info("Resolved Adjustable DPI (0x2201) at index 0x\(String(format: "%02X", resolvedFeatureIndex)) on deviceIndex 0x\(String(format: "%02X", deviceIndex))")
+                        queryCurrentDpi()
+                        applyConfiguredHardwareSettings()
+                        NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
+                    } else {
+                        managed?.dpiFeatureIndex = nil
+                        self.currentDpi = nil
+                        Log.info("Adjustable DPI not supported on '\(managed?.name ?? "device")'.")
+                        NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
                     }
                 }
                 return
+            }
+
+            // Battery Feature Reports (0x1004 Unified Battery or 0x1000 Legacy Battery)
+            if let managed = targetDevice.flatMap({ managedDevices[$0] }),
+               let batteryIdx = managed.batteryFeatureIndex,
+               featureIndex == batteryIdx {
+                if managed.isUnifiedBattery {
+                    // Function 1 response or Event 0 notification
+                    if fn == 0x01 || fn == 0x00 {
+                        let percentage = Int(bytes[4])
+                        let chargingStatus = bytes[5]
+                        let isCharging = (chargingStatus == 1 || chargingStatus == 2 || chargingStatus == 3)
+                        let info = BatteryInfo(percentage: min(100, max(0, percentage)), isCharging: isCharging)
+                        self.batteryInfo = info
+                        Log.info("🔋 Battery Status (Unified): \(info.percentage)% \(info.isCharging ? "(Charging ⚡)" : "")")
+                        NotificationCenter.default.post(name: .hidBatteryStatusDidChange, object: info)
+                        return
+                    }
+                } else {
+                    // Function 0 response or Event 0 notification
+                    if fn == 0x00 {
+                        let percentage = Int(bytes[4])
+                        let statusFlags = bytes[6]
+                        let isCharging = ((statusFlags & 0x01) != 0 || statusFlags == 1 || statusFlags == 2)
+                        let info = BatteryInfo(percentage: min(100, max(0, percentage)), isCharging: isCharging)
+                        self.batteryInfo = info
+                        Log.info("🔋 Battery Status (Legacy): \(info.percentage)% \(info.isCharging ? "(Charging ⚡)" : "")")
+                        NotificationCenter.default.post(name: .hidBatteryStatusDidChange, object: info)
+                        return
+                    }
+                }
+            }
+
+            // Adjustable DPI Reports (0x2201)
+            if let managed = targetDevice.flatMap({ managedDevices[$0] }),
+               let dpiIdx = managed.dpiFeatureIndex,
+               featureIndex == dpiIdx {
+                if fn == 0x02 { // Function 2: getSensorDpi
+                    let dpi = (Int(bytes[5]) << 8) | Int(bytes[6])
+                    if dpi > 0 {
+                        self.currentDpi = dpi
+                        managed.currentDpi = dpi
+                        Log.info("🎯 Optical Sensor DPI reported: \(dpi)")
+                        NotificationCenter.default.post(name: .hidDpiDidChange, object: dpi)
+                        return
+                    }
+                }
             }
 
             // Reprogrammable Controls Feature (0x1B04)
             let devReprog = targetDevice.flatMap { managedDevices[$0]?.reprogFeatureIndex }
             let expectedFeatureIndex = devReprog ?? self.reprogFeatureIndex
             if let expected = expectedFeatureIndex, featureIndex == expected {
-                let fn = functionOrEvent >> 4
-
                 // Response to setCidReporting() (Function 3)
                 if fn == 0x03 {
                     Log.debug("✅ setCidReporting confirmation received from hardware.")
                     return
                 }
 
-                // In Logitech HID++ 2.0 (Feature 0x1B04), button press/release notifications
-                // are strictly Event 0 (functionOrEvent == 0x00).
-                // Any other functionOrEvent value is a response to another command, query, or error,
-                // and MUST NEVER be parsed as a button press!
+                // In Logitech HID++ 2.0 (Feature 0x1B04), button notifications are strictly Event 0
                 guard functionOrEvent == 0x00 else { return }
 
                 // Event Notification: DivertedButtonsEvent (Array of active CIDs)
@@ -563,10 +833,9 @@ public final class HIDPlusPlusManager {
                 let pairedDeviceIndex = deviceIndex
                 Log.info("Wireless device connected on receiver (Device \(pairedDeviceIndex)). Initializing features...")
                 if let dev = targetDevice {
-                    queryFeature(device: dev, featureId: 0x1B04, deviceIndex: pairedDeviceIndex)
+                    discoverUSBFeatures(dev, deviceIndex: pairedDeviceIndex)
                 }
             }
         }
     }
 }
-

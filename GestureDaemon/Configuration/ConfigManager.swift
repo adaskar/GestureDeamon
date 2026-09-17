@@ -137,6 +137,11 @@ public struct AppConfig: Codable, Equatable {
     public var backButtonAction: ActionDefinition?
     public var forwardButtonAction: ActionDefinition?
 
+    // Hardware Features (HID++)
+    public var smartShiftEnabled: Bool?
+    public var smartShiftThreshold: Int?
+    public var sensorDpi: Int?
+
     // Logging Configuration
     public var enableLogging: Bool?
     public var logLevel: String?
@@ -161,6 +166,9 @@ public struct AppConfig: Codable, Equatable {
         forwardButtonIndex: Int64? = 4,
         backButtonAction: ActionDefinition? = nil,
         forwardButtonAction: ActionDefinition? = nil,
+        smartShiftEnabled: Bool? = nil,
+        smartShiftThreshold: Int? = nil,
+        sensorDpi: Int? = nil,
         enableLogging: Bool? = false,
         logLevel: String? = "Info",
         applications: [String: AppProfile]? = nil
@@ -181,6 +189,9 @@ public struct AppConfig: Codable, Equatable {
         self.forwardButtonIndex = forwardButtonIndex
         self.backButtonAction = backButtonAction
         self.forwardButtonAction = forwardButtonAction
+        self.smartShiftEnabled = smartShiftEnabled
+        self.smartShiftThreshold = smartShiftThreshold
+        self.sensorDpi = sensorDpi
         self.enableLogging = enableLogging
         self.logLevel = logLevel
         self.applications = applications
@@ -203,6 +214,9 @@ public struct AppConfig: Codable, Equatable {
         case forwardButtonIndex = "ForwardButtonIndex"
         case backButtonAction = "BackButtonAction"
         case forwardButtonAction = "ForwardButtonAction"
+        case smartShiftEnabled = "SmartShiftEnabled"
+        case smartShiftThreshold = "SmartShiftThreshold"
+        case sensorDpi = "SensorDPI"
         case enableLogging = "EnableLogging"
         case logLevel = "LogLevel"
         case applications = "Applications"

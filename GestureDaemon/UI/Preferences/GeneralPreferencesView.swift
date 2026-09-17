@@ -5,6 +5,12 @@ public struct GeneralPreferencesView: View {
     @ObservedObject var viewModel: PreferencesViewModel
     @State private var launchAtLogin: Bool = LoginItemManager.shared.isLaunchAtLoginEnabled
     @State private var showResetConfirmation: Bool = false
+    @State private var batteryInfo: HIDPlusPlusManager.BatteryInfo? = HIDPlusPlusManager.shared.batteryInfo
+    @State private var connectedDeviceName: String? = HIDPlusPlusManager.shared.connectedDeviceName
+    @State private var connectedTransport: HIDPlusPlusManager.TransportType? = HIDPlusPlusManager.shared.connectedTransport
+    @State private var currentDpi: Int? = HIDPlusPlusManager.shared.currentDpi
+    @State private var isSmartShiftSupported: Bool = HIDPlusPlusManager.shared.isSmartShiftSupported
+    @State private var isDpiSupported: Bool = HIDPlusPlusManager.shared.isDpiSupported
 
     public init(viewModel: PreferencesViewModel) {
         self.viewModel = viewModel
@@ -13,22 +19,47 @@ public struct GeneralPreferencesView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Section 1: Hardware & Trigger
+                // Section 1: Hardware Controls (HID++)
+                hardwareSection
+
+                // Section 2: Hardware & Trigger
                 triggerSection
 
-                // Section 2: Sensitivity & Physics
+                // Section 3: Sensitivity & Physics
                 sensitivitySection
 
-                // Section 3: App & System Integration
+                // Section 4: App & System Integration
                 systemSection
 
-                // Section 4: Permissions
+                // Section 5: Permissions
                 permissionsSection
 
-                // Section 5: Advanced & Reset
+                // Section 6: Advanced & Reset
                 advancedSection
             }
             .padding(16)
+        }
+        .onAppear {
+            HIDPlusPlusManager.shared.refreshBatteryStatus()
+            HIDPlusPlusManager.shared.queryCurrentDpi()
+            self.isSmartShiftSupported = HIDPlusPlusManager.shared.isSmartShiftSupported
+            self.isDpiSupported = HIDPlusPlusManager.shared.isDpiSupported
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hidBatteryStatusDidChange)) { notif in
+            self.batteryInfo = notif.object as? HIDPlusPlusManager.BatteryInfo ?? HIDPlusPlusManager.shared.batteryInfo
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hidHardwareCapabilitiesDidChange)) { _ in
+            self.connectedDeviceName = HIDPlusPlusManager.shared.connectedDeviceName
+            self.connectedTransport = HIDPlusPlusManager.shared.connectedTransport
+            self.batteryInfo = HIDPlusPlusManager.shared.batteryInfo
+            self.currentDpi = HIDPlusPlusManager.shared.currentDpi
+            self.isSmartShiftSupported = HIDPlusPlusManager.shared.isSmartShiftSupported
+            self.isDpiSupported = HIDPlusPlusManager.shared.isDpiSupported
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hidDpiDidChange)) { notif in
+            if let dpi = notif.object as? Int {
+                self.currentDpi = dpi
+            }
         }
         .alert(isPresented: $showResetConfirmation) {
             Alert(
@@ -43,6 +74,190 @@ public struct GeneralPreferencesView: View {
     }
 
     // MARK: - Sections
+
+    private var hardwareSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Hardware Controls (HID++)", systemImage: "cpu")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 12) {
+                // Device & Battery Status Row
+                HStack(spacing: 12) {
+                    Image(systemName: "computermouse.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.accentColor)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(connectedDeviceName ?? "Logitech Device")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+
+                        HStack(spacing: 6) {
+                            Image(systemName: connectedTransport == .bluetoothLE ? "antenna.radiowaves.left.and.right" : "cable.connector")
+                                .font(.caption2)
+                            Text(connectedTransport?.rawValue ?? "Searching...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    if let battery = batteryInfo {
+                        HStack(spacing: 6) {
+                            Image(systemName: batteryIconName(for: battery))
+                                .foregroundColor(battery.percentage <= 20 && !battery.isCharging ? .red : .primary)
+                            Text("\(battery.percentage)%")
+                                .font(.subheadline)
+                                .monospacedDigit()
+                            if battery.isCharging {
+                                Image(systemName: "bolt.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.yellow)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(8)
+                    }
+                }
+
+                // SmartShift Flywheel Control (only shown if hardware supports electronic flywheel clutch)
+                if isSmartShiftSupported {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Label("SmartShift", systemImage: "arrow.triangle.2.circlepath")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            Spacer()
+
+                            Toggle("", isOn: Binding(
+                                get: { viewModel.config.smartShiftEnabled ?? true },
+                                set: { enabled in
+                                    viewModel.config.smartShiftEnabled = enabled
+                                    let threshold = viewModel.config.smartShiftThreshold ?? 20
+                                    HIDPlusPlusManager.shared.setSmartShift(enabled: enabled, threshold: threshold)
+                                }
+                            ))
+                            .toggleStyle(SwitchToggleStyle())
+                            .labelsHidden()
+                        }
+
+                        if viewModel.config.smartShiftEnabled ?? true {
+                            HStack(spacing: 12) {
+                                Image(systemName: "gauge.low")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Slider(
+                                    value: Binding(
+                                        get: { Double(viewModel.config.smartShiftThreshold ?? 20) },
+                                        set: { val in
+                                            let intVal = Int(val)
+                                            viewModel.config.smartShiftThreshold = intVal
+                                            HIDPlusPlusManager.shared.setSmartShift(enabled: true, threshold: intVal)
+                                        }
+                                    ),
+                                    in: 1...50,
+                                    step: 1
+                                )
+
+                                Image(systemName: "gauge.high")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Text("\(viewModel.config.smartShiftThreshold ?? 20)")
+                                    .font(.subheadline)
+                                    .monospacedDigit()
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 28, alignment: .trailing)
+                            }
+                        }
+                    }
+                }
+
+                // Sensor DPI Control (only shown if hardware supports software adjustable DPI)
+                if isDpiSupported {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Label("Sensor DPI", systemImage: "scope")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+
+                            Spacer()
+
+                            Text("\(viewModel.config.sensorDpi ?? (currentDpi ?? 1000)) DPI")
+                                .font(.subheadline)
+                                .monospacedDigit()
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "tortoise.fill")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            Slider(
+                                value: Binding(
+                                    get: { Double(viewModel.config.sensorDpi ?? (currentDpi ?? 1000)) },
+                                    set: { val in
+                                        let dpiVal = Int(val)
+                                        viewModel.config.sensorDpi = dpiVal
+                                        HIDPlusPlusManager.shared.setSensorDpi(dpi: dpiVal)
+                                    }
+                                ),
+                                in: 200...4000,
+                                step: 50
+                            )
+
+                            Image(systemName: "hare.fill")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                // Device Capabilities Summary (when advanced motorized controls are not supported on this model)
+                if !isSmartShiftSupported && !isDpiSupported && connectedDeviceName != nil {
+                    Divider()
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Text("SmartShift & software DPI are not available on \(connectedDeviceName ?? "this device").")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(14)
+            .background(Color(NSColor.windowBackgroundColor).opacity(0.8))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+            )
+        }
+    }
+
+    private func batteryIconName(for info: HIDPlusPlusManager.BatteryInfo) -> String {
+        if info.isCharging { return "battery.100.bolt" }
+        switch info.percentage {
+        case 85...100: return "battery.100"
+        case 60..<85:  return "battery.75"
+        case 35..<60:  return "battery.50"
+        case 15..<35:  return "battery.25"
+        default:       return "battery.0"
+        }
+    }
 
     private var triggerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
