@@ -237,7 +237,26 @@ public final class ConfigManager {
     public static let shared = ConfigManager()
     public static let configDidChangeNotification = Notification.Name("GestureDaemon.configDidChangeNotification")
 
-    public private(set) var activeConfig: AppConfig
+    public private(set) var activeConfig: AppConfig {
+        didSet {
+            updateOverriddenSlots()
+        }
+    }
+    private var overriddenSlots: Set<ActionSlot> = []
+
+    private func updateOverriddenSlots() {
+        var slots = Set<ActionSlot>()
+        if let apps = activeConfig.applications {
+            for profile in apps.values {
+                for slot in ActionSlot.allCases {
+                    if profile.action(for: slot) != nil {
+                        slots.insert(slot)
+                    }
+                }
+            }
+        }
+        self.overriddenSlots = slots
+    }
 
     private var fileMonitorSource: DispatchSourceFileSystemObject?
     private let fileManager = FileManager.default
@@ -253,6 +272,7 @@ public final class ConfigManager {
 
     private init() {
         self.activeConfig = ConfigManager.fallbackDefaultConfig()
+        updateOverriddenSlots()
         Log.isEnabled = self.activeConfig.enableLogging ?? false
         Log.currentLevel = LogLevel.fromString(self.activeConfig.logLevel)
         loadConfiguration()
@@ -260,9 +280,15 @@ public final class ConfigManager {
     }
 
     public func effectiveAction(for slot: ActionSlot) -> ActionDefinition? {
+        // Fast-path: If no application profile overrides this slot, return the global action
+        // immediately in O(1) time without querying NSWorkspace (zero IPC, zero latency, zero CPU on app switch).
+        guard overriddenSlots.contains(slot), let apps = activeConfig.applications else {
+            return activeConfig.globalAction(for: slot)
+        }
+
         let currentBundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
 
-        if let bundle = currentBundle, let apps = activeConfig.applications {
+        if let bundle = currentBundle {
             // 1. Exact match against configured bundle identifier
             var profile = apps[bundle]
 

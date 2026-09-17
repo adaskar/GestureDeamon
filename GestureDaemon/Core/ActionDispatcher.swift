@@ -9,9 +9,42 @@ public final class ActionDispatcher {
     private typealias CoreDockSendNotificationFn = @convention(c) (CFString, Int32) -> Int32
 
     private let appServicesHandle: UnsafeMutableRawPointer?
+    private let coreDockSendNotification: CoreDockSendNotificationFn?
+    private let cgsGetSymbolicHotKeyValue: CGSGetSymbolicHotKeyValueFn?
+    private let cgsIsSymbolicHotKeyEnabled: CGSIsSymbolicHotKeyEnabledFn?
+    private let cgsSetSymbolicHotKeyEnabled: CGSSetSymbolicHotKeyEnabledFn?
 
     public init() {
-        appServicesHandle = dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", RTLD_LAZY)
+        let handle = dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", RTLD_LAZY)
+        self.appServicesHandle = handle
+
+        if let handle = handle {
+            if let sym = dlsym(handle, "CoreDockSendNotification") {
+                self.coreDockSendNotification = unsafeBitCast(sym, to: CoreDockSendNotificationFn.self)
+            } else {
+                self.coreDockSendNotification = nil
+            }
+            if let sym = dlsym(handle, "CGSGetSymbolicHotKeyValue") {
+                self.cgsGetSymbolicHotKeyValue = unsafeBitCast(sym, to: CGSGetSymbolicHotKeyValueFn.self)
+            } else {
+                self.cgsGetSymbolicHotKeyValue = nil
+            }
+            if let sym = dlsym(handle, "CGSIsSymbolicHotKeyEnabled") {
+                self.cgsIsSymbolicHotKeyEnabled = unsafeBitCast(sym, to: CGSIsSymbolicHotKeyEnabledFn.self)
+            } else {
+                self.cgsIsSymbolicHotKeyEnabled = nil
+            }
+            if let sym = dlsym(handle, "CGSSetSymbolicHotKeyEnabled") {
+                self.cgsSetSymbolicHotKeyEnabled = unsafeBitCast(sym, to: CGSSetSymbolicHotKeyEnabledFn.self)
+            } else {
+                self.cgsSetSymbolicHotKeyEnabled = nil
+            }
+        } else {
+            self.coreDockSendNotification = nil
+            self.cgsGetSymbolicHotKeyValue = nil
+            self.cgsIsSymbolicHotKeyEnabled = nil
+            self.cgsSetSymbolicHotKeyEnabled = nil
+        }
     }
 
     public func dispatch(action: ActionDefinition?) {
@@ -75,31 +108,21 @@ public final class ActionDispatcher {
         }
     }
 
-    /// Post native Dock notification via private ApplicationServices SPI (com.apple.expose.awake etc.)
+    /// Post native Dock notification via pre-resolved ApplicationServices SPI (com.apple.expose.awake etc.)
     private func sendDockNotification(_ name: String) -> Bool {
-        guard let handle = appServicesHandle,
-              let sym = dlsym(handle, "CoreDockSendNotification") else {
-            return false
-        }
-        let fn = unsafeBitCast(sym, to: CoreDockSendNotificationFn.self)
-        let res = fn(name as CFString, 0)
-        return res == 0
+        guard let fn = coreDockSendNotification else { return false }
+        return fn(name as CFString, 0) == 0
     }
 
     /// Switch macOS Spaces using WindowServer symbolic hotkey SPI (79: Left, 81: Right).
     /// Retrieves user's exact keycode and modifier flags (including Fn/NX_SECONDARYFNMASK)
     /// and dispatches directly into the login session event tap.
     private func postSymbolicHotKey(_ hotkeyId: UInt32) -> Bool {
-        guard let handle = appServicesHandle,
-              let symGet = dlsym(handle, "CGSGetSymbolicHotKeyValue"),
-              let symIs = dlsym(handle, "CGSIsSymbolicHotKeyEnabled"),
-              let symSet = dlsym(handle, "CGSSetSymbolicHotKeyEnabled") else {
+        guard let getVal = cgsGetSymbolicHotKeyValue,
+              let isEn = cgsIsSymbolicHotKeyEnabled,
+              let setEn = cgsSetSymbolicHotKeyEnabled else {
             return false
         }
-
-        let getVal = unsafeBitCast(symGet, to: CGSGetSymbolicHotKeyValueFn.self)
-        let isEn = unsafeBitCast(symIs, to: CGSIsSymbolicHotKeyEnabledFn.self)
-        let setEn = unsafeBitCast(symSet, to: CGSSetSymbolicHotKeyEnabledFn.self)
 
         var keyEq: UInt16 = 0
         var vKey: UInt16 = 0
@@ -129,8 +152,7 @@ public final class ActionDispatcher {
     }
 
     private func sendSyntheticShortcut(keyCode: CGKeyCode, modifiers: [String]) {
-        let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "UNKNOWN"
-        Log.info("⚡ [SYNTHETIC SHORTCUT] Injecting keyCode=\(keyCode), modifiers=\(modifiers), targetApp='\(frontApp)' into cghidEventTap")
+        Log.info("⚡ [SYNTHETIC SHORTCUT] Injecting keyCode=\(keyCode), modifiers=\(modifiers) into cghidEventTap")
 
         let loc = CGEventTapLocation.cghidEventTap
         let source = CGEventSource(stateID: .hidSystemState)
@@ -163,27 +185,30 @@ public final class ActionDispatcher {
             }
         }
 
-        usleep(15_000)
+        if !modKeyCodes.isEmpty {
+            usleep(1_500)
+        }
 
         if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true) {
             keyDown.flags = flags
             keyDown.post(tap: loc)
         }
 
-        usleep(30_000)
+        usleep(3_000)
 
         if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) {
             keyUp.flags = flags
             keyUp.post(tap: loc)
         }
 
-        usleep(15_000)
-
-        for modKey in modKeyCodes.reversed() {
-            if let flagEv = CGEvent(keyboardEventSource: source, virtualKey: modKey, keyDown: false) {
-                flagEv.type = .flagsChanged
-                flagEv.flags = []
-                flagEv.post(tap: loc)
+        if !modKeyCodes.isEmpty {
+            usleep(1_500)
+            for modKey in modKeyCodes.reversed() {
+                if let flagEv = CGEvent(keyboardEventSource: source, virtualKey: modKey, keyDown: false) {
+                    flagEv.type = .flagsChanged
+                    flagEv.flags = []
+                    flagEv.post(tap: loc)
+                }
             }
         }
     }

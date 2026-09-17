@@ -95,7 +95,7 @@ public final class HIDPlusPlusManager {
         ]
 
         IOHIDManagerSetDeviceMatchingMultiple(manager, matchingCriteria as CFArray)
-        IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
 
         let context = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
@@ -125,12 +125,12 @@ public final class HIDPlusPlusManager {
     public func stop() {
         guard isStarted, let manager = hidManager else { return }
         for (dev, _) in managedDevices {
-            IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+            IOHIDDeviceUnscheduleFromRunLoop(dev, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
             IOHIDDeviceClose(dev, IOOptionBits(kIOHIDOptionsTypeNone))
         }
         managedDevices.removeAll()
         IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
-        IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
         self.activeDevice = nil
         self.hidManager = nil
         self.isStarted = false
@@ -183,7 +183,7 @@ public final class HIDPlusPlusManager {
         let managed = ManagedDevice(device: device, name: productName, transport: transport)
         managedDevices[device] = managed
 
-        IOHIDDeviceScheduleWithRunLoop(device, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDDeviceScheduleWithRunLoop(device, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
 
         let openResult = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
 
@@ -246,7 +246,7 @@ public final class HIDPlusPlusManager {
         let name = managedDevices[device]?.name ?? "Logitech Device"
         Log.info("Logitech Device disconnected: '\(name)'.")
 
-        IOHIDDeviceUnscheduleFromRunLoop(device, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+        IOHIDDeviceUnscheduleFromRunLoop(device, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
         IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
         managedDevices.removeValue(forKey: device)
 
@@ -460,11 +460,14 @@ public final class HIDPlusPlusManager {
         // Copy the relevant bytes while the raw pointer is still valid on this queue.
         let bytes = Array(UnsafeBufferPointer(start: report, count: length))
 
-        // Dispatch all HID++ state processing to the main thread.
-        // HID++ frames are rare (init responses + occasional button events) so the
-        // dispatch overhead is negligible.
-        DispatchQueue.main.async { [weak self] in
-            self?.processHIDPlusPlusReport(fromDevice: device, bytes: bytes)
+        // If already on the main thread (standard when scheduled on the main run loop),
+        // process immediately to eliminate dispatch scheduling latency.
+        if Thread.isMainThread {
+            processHIDPlusPlusReport(fromDevice: device, bytes: bytes)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.processHIDPlusPlusReport(fromDevice: device, bytes: bytes)
+            }
         }
     }
 

@@ -57,27 +57,30 @@ public enum Log {
         return isoFormatter.string(from: Date())
     }
 
-    public static func info(_ message: String) {
+    public static func info(_ message: @autoclosure () -> String) {
         guard isEnabled && currentLevel >= .info else { return }
-        logger.info("\(message, privacy: .public)")
-        print("[INFO] \(message)")
+        let msg = message()
+        logger.info("\(msg, privacy: .public)")
+        print("[INFO] \(msg)")
         fflush(stdout)
-        writeToFile("[\(timestamp())] [INFO] \(message)")
+        writeToFile("[\(timestamp())] [INFO] \(msg)")
     }
 
-    public static func error(_ message: String) {
+    public static func error(_ message: @autoclosure () -> String) {
         guard isEnabled && currentLevel >= .error else { return }
-        logger.error("\(message, privacy: .public)")
-        print("[ERROR] \(message)")
+        let msg = message()
+        logger.error("\(msg, privacy: .public)")
+        print("[ERROR] \(msg)")
         fflush(stdout)
-        writeToFile("[\(timestamp())] [ERROR] \(message)")
+        writeToFile("[\(timestamp())] [ERROR] \(msg)")
     }
 
-    public static func debug(_ message: String) {
+    public static func debug(_ message: @autoclosure () -> String) {
         guard isEnabled && currentLevel >= .debug else { return }
-        logger.debug("\(message, privacy: .public)")
-        print("[DEBUG] \(message)")
+        let msg = message()
+        logger.debug("\(msg, privacy: .public)")
+        print("[DEBUG] \(msg)")
         fflush(stdout)
-        writeToFile("[\(timestamp())] [DEBUG] \(message)")
+        writeToFile("[\(timestamp())] [DEBUG] \(msg)")
     }
 }

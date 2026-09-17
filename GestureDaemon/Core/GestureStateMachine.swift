@@ -17,6 +17,10 @@ public final class GestureStateMachine {
     private var accumulatedDeltaY: Double = 0.0
     private var gestureConsumed = false
 
+    private var cachedThresholdDistance: Double = 35.0
+    private var cachedDeadzoneRadius: Double = 8.0
+    private var cachedSwallowTriggerEvents: Bool = true
+
     private var magicGestureTimer: DispatchSourceTimer?
     private var buttonSafetyTimer: DispatchSourceTimer?
 
@@ -28,6 +32,13 @@ public final class GestureStateMachine {
     public var onCalibrationEvent: ((CalibrationEvent) -> Void)?
 
     public init() {}
+
+    private func updateCachedPhysics() {
+        let config = ConfigManager.shared.activeConfig
+        self.cachedThresholdDistance = config.thresholdDistance
+        self.cachedDeadzoneRadius = config.deadzoneRadius
+        self.cachedSwallowTriggerEvents = config.swallowTriggerEvents
+    }
 
     public func reset() {
         magicGestureTimer?.cancel()
@@ -42,6 +53,7 @@ public final class GestureStateMachine {
     }
 
     public func handleMagicDown(isMacro: Bool = false, windowDurationMs: Double = 200.0) -> Bool {
+        updateCachedPhysics()
         isTriggerEngaged = true
         accumulatedDeltaX = 0.0
         accumulatedDeltaY = 0.0
@@ -138,6 +150,7 @@ public final class GestureStateMachine {
     public func handleButtonDown(buttonNumber: Int64) -> Bool {
         let config = ConfigManager.shared.activeConfig
         guard buttonNumber == config.triggerButtonIndex else { return false }
+        updateCachedPhysics()
         isTriggerEngaged = true
         accumulatedDeltaX = 0.0
         accumulatedDeltaY = 0.0
@@ -161,19 +174,18 @@ public final class GestureStateMachine {
         timer.resume()
         self.buttonSafetyTimer = timer
 
-        return config.swallowTriggerEvents
+        return cachedSwallowTriggerEvents
     }
 
     public func handleMouseDragged(deltaX: Double, deltaY: Double) -> Bool {
         guard isTriggerEngaged else { return false }
-        let config = ConfigManager.shared.activeConfig
         accumulatedDeltaX += deltaX
         accumulatedDeltaY += deltaY
         let distance = hypot(accumulatedDeltaX, accumulatedDeltaY)
 
         if isCalibrationMode {
             onCalibrationEvent?(.motionUpdated(dx: accumulatedDeltaX, dy: accumulatedDeltaY, distance: distance))
-            if distance >= config.thresholdDistance {
+            if distance >= cachedThresholdDistance {
                 gestureConsumed = true
                 let dir = resolveDirection(dx: accumulatedDeltaX, dy: accumulatedDeltaY)
                 let action = actionForDirection(dir)
@@ -184,8 +196,8 @@ public final class GestureStateMachine {
             return true
         }
 
-        if distance < config.deadzoneRadius { return config.swallowTriggerEvents }
-        if distance >= config.thresholdDistance && !gestureConsumed {
+        if distance < cachedDeadzoneRadius { return cachedSwallowTriggerEvents }
+        if distance >= cachedThresholdDistance && !gestureConsumed {
             gestureConsumed = true
             magicGestureTimer?.cancel()
             magicGestureTimer = nil
@@ -195,7 +207,7 @@ public final class GestureStateMachine {
             onEngagementChanged?(false)
             executeDirectionalAction(resolveDirection(dx: accumulatedDeltaX, dy: accumulatedDeltaY))
         }
-        return config.swallowTriggerEvents
+        return cachedSwallowTriggerEvents
     }
 
     public func handleButtonUp(buttonNumber: Int64) -> Bool {
@@ -234,7 +246,7 @@ public final class GestureStateMachine {
         accumulatedDeltaY = 0.0
         gestureConsumed = false
         onEngagementChanged?(false)
-        return config.swallowTriggerEvents
+        return cachedSwallowTriggerEvents
     }
 
     private func resolveDirection(dx: Double, dy: Double) -> GestureDirection {
