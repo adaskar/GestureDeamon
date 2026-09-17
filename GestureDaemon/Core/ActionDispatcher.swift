@@ -105,7 +105,47 @@ public final class ActionDispatcher {
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = ["-c", command]
             try? process.run()
+
+        case .system:
+            guard let sysAct = action.systemAction else { return }
+            switch sysAct.lowercased() {
+            case "volumeup":
+                sendMediaKey(0) // NX_KEYTYPE_SOUND_UP
+            case "volumedown":
+                sendMediaKey(1) // NX_KEYTYPE_SOUND_DOWN
+            case "mute":
+                sendMediaKey(7) // NX_KEYTYPE_MUTE
+            case "brightnessup":
+                sendMediaKey(2) // NX_KEYTYPE_BRIGHTNESS_UP
+            case "brightnessdown":
+                sendMediaKey(3) // NX_KEYTYPE_BRIGHTNESS_DOWN
+            default:
+                break
+            }
         }
+    }
+
+    /// Post native macOS system media key event (Volume, Brightness, Mute) to cghidEventTap
+    private func sendMediaKey(_ key: Int32) {
+        func postKey(down: Bool) {
+            let data1 = Int((key << 16) | (down ? 0xa00 : 0xb00))
+            if let ev = NSEvent.otherEvent(
+                with: .systemDefined,
+                location: .zero,
+                modifierFlags: down ? NSEvent.ModifierFlags(rawValue: 0xa00) : [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                subtype: 8,
+                data1: data1,
+                data2: -1
+            ) {
+                let cgEv = ev.cgEvent
+                cgEv?.post(tap: .cghidEventTap)
+            }
+        }
+        postKey(down: true)
+        postKey(down: false)
     }
 
     /// Post native Dock notification via pre-resolved ApplicationServices SPI (com.apple.expose.awake etc.)

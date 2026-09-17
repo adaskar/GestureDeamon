@@ -70,6 +70,42 @@ public struct GesturesPreferencesView: View {
                         action: $viewModel.config.dragDownAction
                     )
                 }
+
+                // Scroll Wheel Chording Section
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "circle.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.green)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Scroll Wheel Chording")
+                            .font(.headline)
+                        Text("Hold down the Thumb button and roll your scroll wheel to adjust volume, brightness, or zoom smoothly without scrolling the active document.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(12)
+                .background(Color.green.opacity(0.08))
+                .cornerRadius(10)
+
+                VStack(spacing: 14) {
+                    gestureCard(
+                        title: "Thumb + Scroll Up",
+                        subtitle: "Hold thumb button and roll scroll wheel up.",
+                        icon: "chevron.up.circle.fill",
+                        iconColor: .green,
+                        action: $viewModel.config.scrollUpAction
+                    )
+
+                    gestureCard(
+                        title: "Thumb + Scroll Down",
+                        subtitle: "Hold thumb button and roll scroll wheel down.",
+                        icon: "chevron.down.circle.fill",
+                        iconColor: .green,
+                        action: $viewModel.config.scrollDownAction
+                    )
+                }
             }
             .padding(16)
         }

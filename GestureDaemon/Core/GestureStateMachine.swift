@@ -8,6 +8,7 @@ public enum CalibrationEvent {
     case motionUpdated(dx: Double, dy: Double, distance: Double)
     case directionDetected(GestureDirection?, ActionDefinition?)
     case gestureCompleted(wasClick: Bool, ActionDefinition?)
+    case scrollChording(isUp: Bool, action: ActionDefinition?)
     case otherButton(buttonIndex: Int, isDown: Bool, actionName: String?)
 }
 
@@ -208,6 +209,29 @@ public final class GestureStateMachine {
             executeDirectionalAction(resolveDirection(dx: accumulatedDeltaX, dy: accumulatedDeltaY))
         }
         return cachedSwallowTriggerEvents
+    }
+
+    public func handleScrollWheel(deltaY: Int64) -> Bool {
+        guard isTriggerEngaged else { return false }
+        gestureConsumed = true
+        // Damp accumulated motion to prevent accidental directional gesture while scrolling
+        accumulatedDeltaX = 0.0
+        accumulatedDeltaY = 0.0
+
+        // Extend safety timers while actively scrolling
+        magicGestureTimer?.schedule(deadline: .now() + 5.0)
+        buttonSafetyTimer?.schedule(deadline: .now() + 5.0)
+
+        let slot: ActionSlot = deltaY > 0 ? .scrollUp : .scrollDown
+        let action = ConfigManager.shared.effectiveAction(for: slot)
+
+        if isCalibrationMode {
+            onCalibrationEvent?(.scrollChording(isUp: deltaY > 0, action: action))
+            return true
+        }
+
+        ActionDispatcher.shared.dispatch(action: action)
+        return true
     }
 
     public func handleButtonUp(buttonNumber: Int64) -> Bool {

@@ -163,6 +163,8 @@ public struct AppProfilesPreferencesView: View {
                     slotOverrideCard(slot: .dragRight, title: "Swipe Right", bundleId: bundleId)
                     slotOverrideCard(slot: .dragUp, title: "Swipe Up", bundleId: bundleId)
                     slotOverrideCard(slot: .dragDown, title: "Swipe Down", bundleId: bundleId)
+                    slotOverrideCard(slot: .scrollUp, title: "Thumb + Scroll Up", bundleId: bundleId)
+                    slotOverrideCard(slot: .scrollDown, title: "Thumb + Scroll Down", bundleId: bundleId)
                     slotOverrideCard(slot: .backButton, title: "Back Button", bundleId: bundleId)
                     slotOverrideCard(slot: .forwardButton, title: "Forward Button", bundleId: bundleId)
                 }

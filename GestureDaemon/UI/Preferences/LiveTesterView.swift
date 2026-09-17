@@ -365,6 +365,10 @@ public struct LiveTesterView: View {
                 lastFiredActionDescription = "Detected: Swipe \(dir) (\(actionDesc))"
             }
 
+        case .scrollChording(let isUp, let action):
+            let actionDesc = action?.comment ?? (isUp ? "Thumb + Scroll Up" : "Thumb + Scroll Down")
+            lastFiredActionDescription = "Detected: \(isUp ? "Scroll Up" : "Scroll Down") (\(actionDesc))"
+
         case .otherButton(let buttonIndex, let isDown, let actionName):
             if isDown {
                 pressedButtons.insert(buttonIndex)

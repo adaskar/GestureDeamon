@@ -7,6 +7,8 @@ public enum ActionSlot: String, CaseIterable, Identifiable {
     case dragRight = "Swipe Right"
     case dragUp = "Swipe Up"
     case dragDown = "Swipe Down"
+    case scrollUp = "Thumb + Scroll Up"
+    case scrollDown = "Thumb + Scroll Down"
     case backButton = "Back Button"
     case forwardButton = "Forward Button"
 
@@ -18,6 +20,7 @@ public struct ActionDefinition: Codable, Equatable, Hashable {
         case shortcut = "Shortcut"
         case application = "Application"
         case command = "Command"
+        case system = "System"
 
         public var id: String { rawValue }
     }
@@ -27,6 +30,7 @@ public struct ActionDefinition: Codable, Equatable, Hashable {
     public var modifiers: [String]?
     public var bundleIdentifier: String?
     public var commandPath: String?
+    public var systemAction: String?
     public var comment: String?
 
     public init(
@@ -35,6 +39,7 @@ public struct ActionDefinition: Codable, Equatable, Hashable {
         modifiers: [String]? = nil,
         bundleIdentifier: String? = nil,
         commandPath: String? = nil,
+        systemAction: String? = nil,
         comment: String? = nil
     ) {
         self.type = type
@@ -42,6 +47,7 @@ public struct ActionDefinition: Codable, Equatable, Hashable {
         self.modifiers = modifiers
         self.bundleIdentifier = bundleIdentifier
         self.commandPath = commandPath
+        self.systemAction = systemAction
         self.comment = comment
     }
 
@@ -51,6 +57,7 @@ public struct ActionDefinition: Codable, Equatable, Hashable {
         case modifiers = "Modifiers"
         case bundleIdentifier = "BundleIdentifier"
         case commandPath = "CommandPath"
+        case systemAction = "SystemAction"
         case comment = "Comment"
     }
 }
@@ -61,6 +68,8 @@ public struct AppProfile: Codable, Equatable, Hashable {
     public var dragRightAction: ActionDefinition?
     public var dragUpAction: ActionDefinition?
     public var dragDownAction: ActionDefinition?
+    public var scrollUpAction: ActionDefinition?
+    public var scrollDownAction: ActionDefinition?
     public var backButtonAction: ActionDefinition?
     public var forwardButtonAction: ActionDefinition?
 
@@ -70,6 +79,8 @@ public struct AppProfile: Codable, Equatable, Hashable {
         dragRightAction: ActionDefinition? = nil,
         dragUpAction: ActionDefinition? = nil,
         dragDownAction: ActionDefinition? = nil,
+        scrollUpAction: ActionDefinition? = nil,
+        scrollDownAction: ActionDefinition? = nil,
         backButtonAction: ActionDefinition? = nil,
         forwardButtonAction: ActionDefinition? = nil
     ) {
@@ -78,6 +89,8 @@ public struct AppProfile: Codable, Equatable, Hashable {
         self.dragRightAction = dragRightAction
         self.dragUpAction = dragUpAction
         self.dragDownAction = dragDownAction
+        self.scrollUpAction = scrollUpAction
+        self.scrollDownAction = scrollDownAction
         self.backButtonAction = backButtonAction
         self.forwardButtonAction = forwardButtonAction
     }
@@ -88,6 +101,8 @@ public struct AppProfile: Codable, Equatable, Hashable {
         case dragRightAction = "DragRightAction"
         case dragUpAction = "DragUpAction"
         case dragDownAction = "DragDownAction"
+        case scrollUpAction = "ScrollUpAction"
+        case scrollDownAction = "ScrollDownAction"
         case backButtonAction = "BackButtonAction"
         case forwardButtonAction = "ForwardButtonAction"
     }
@@ -99,6 +114,8 @@ public struct AppProfile: Codable, Equatable, Hashable {
         case .dragRight: return dragRightAction
         case .dragUp: return dragUpAction
         case .dragDown: return dragDownAction
+        case .scrollUp: return scrollUpAction
+        case .scrollDown: return scrollDownAction
         case .backButton: return backButtonAction
         case .forwardButton: return forwardButtonAction
         }
@@ -111,6 +128,8 @@ public struct AppProfile: Codable, Equatable, Hashable {
         case .dragRight: dragRightAction = action
         case .dragUp: dragUpAction = action
         case .dragDown: dragDownAction = action
+        case .scrollUp: scrollUpAction = action
+        case .scrollDown: scrollDownAction = action
         case .backButton: backButtonAction = action
         case .forwardButton: forwardButtonAction = action
         }
@@ -130,6 +149,8 @@ public struct AppConfig: Codable, Equatable {
     public var dragRightAction: ActionDefinition?
     public var dragUpAction: ActionDefinition?
     public var dragDownAction: ActionDefinition?
+    public var scrollUpAction: ActionDefinition?
+    public var scrollDownAction: ActionDefinition?
 
     // Side Navigation Buttons (Back / Forward)
     public var enableSideButtons: Bool?
@@ -163,6 +184,8 @@ public struct AppConfig: Codable, Equatable {
         dragRightAction: ActionDefinition? = nil,
         dragUpAction: ActionDefinition? = nil,
         dragDownAction: ActionDefinition? = nil,
+        scrollUpAction: ActionDefinition? = nil,
+        scrollDownAction: ActionDefinition? = nil,
         enableSideButtons: Bool? = true,
         backButtonIndex: Int64? = 3,
         forwardButtonIndex: Int64? = 4,
@@ -187,6 +210,8 @@ public struct AppConfig: Codable, Equatable {
         self.dragRightAction = dragRightAction
         self.dragUpAction = dragUpAction
         self.dragDownAction = dragDownAction
+        self.scrollUpAction = scrollUpAction
+        self.scrollDownAction = scrollDownAction
         self.enableSideButtons = enableSideButtons
         self.backButtonIndex = backButtonIndex
         self.forwardButtonIndex = forwardButtonIndex
@@ -213,6 +238,8 @@ public struct AppConfig: Codable, Equatable {
         case dragRightAction = "DragRightAction"
         case dragUpAction = "DragUpAction"
         case dragDownAction = "DragDownAction"
+        case scrollUpAction = "ScrollUpAction"
+        case scrollDownAction = "ScrollDownAction"
         case enableSideButtons = "EnableSideButtons"
         case backButtonIndex = "BackButtonIndex"
         case forwardButtonIndex = "ForwardButtonIndex"
@@ -233,6 +260,8 @@ public struct AppConfig: Codable, Equatable {
         case .dragRight: return dragRightAction
         case .dragUp: return dragUpAction
         case .dragDown: return dragDownAction
+        case .scrollUp: return scrollUpAction
+        case .scrollDown: return scrollDownAction
         case .backButton: return backButtonAction
         case .forwardButton: return forwardButtonAction
         }
@@ -245,6 +274,8 @@ public struct AppConfig: Codable, Equatable {
         case .dragRight: dragRightAction = action
         case .dragUp: dragUpAction = action
         case .dragDown: dragDownAction = action
+        case .scrollUp: scrollUpAction = action
+        case .scrollDown: scrollDownAction = action
         case .backButton: backButtonAction = action
         case .forwardButton: forwardButtonAction = action
         }
@@ -433,6 +464,8 @@ public final class ConfigManager {
             dragRightAction: ActionDefinition(type: .shortcut, keyCode: 123, modifiers: ["Control"], comment: "Natural swipe right -> Switch to Left Space"),
             dragUpAction: ActionDefinition(type: .shortcut, keyCode: 126, modifiers: ["Control"], comment: "Mission Control (Ctrl+Up)"),
             dragDownAction: ActionDefinition(type: .shortcut, keyCode: 125, modifiers: ["Control"], comment: "App Exposé (Ctrl+Down)"),
+            scrollUpAction: ActionDefinition(type: .system, systemAction: "volumeUp", comment: "Volume Up"),
+            scrollDownAction: ActionDefinition(type: .system, systemAction: "volumeDown", comment: "Volume Down"),
             enableSideButtons: true,
             backButtonIndex: 3,
             forwardButtonIndex: 4,

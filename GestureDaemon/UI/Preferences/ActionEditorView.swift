@@ -125,19 +125,29 @@ public struct ActionEditorView: View {
                             .padding(.vertical, 2)
                             .background(Color.secondary.opacity(0.15))
                             .cornerRadius(4)
+                    } else if currentPreset.action.type == .system {
+                        Text("System Event")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.15))
+                            .cornerRadius(4)
                     }
                 }
             }
 
-            HStack {
-                Spacer()
-                Button(action: {
-                    currentCategory = .shortcut
-                }) {
-                    Label("Customize as Custom Shortcut...", systemImage: "slider.horizontal.2.square")
-                        .font(.caption)
+            if let currentPreset = KeyCodeHelper.PresetAction.presets.first(where: { $0.name == currentPresetName() }),
+               currentPreset.action.type == .shortcut {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        currentCategory = .shortcut
+                    }) {
+                        Label("Customize as Custom Shortcut...", systemImage: "slider.horizontal.2.square")
+                            .font(.caption)
+                    }
+                    .buttonStyle(LinkButtonStyle())
                 }
-                .buttonStyle(LinkButtonStyle())
             }
         }
     }
@@ -286,6 +296,8 @@ public struct ActionEditorView: View {
     private static func determineCategory(for action: ActionDefinition?) -> ActionCategory {
         guard let action = action else { return .none }
         switch action.type {
+        case .system:
+            return .preset
         case .application:
             return .application
         case .command:
@@ -319,12 +331,17 @@ public struct ActionEditorView: View {
     }
 
     private func currentPresetName() -> String {
-        guard let action = action, action.type == .shortcut else {
+        guard let action = action else {
             return KeyCodeHelper.PresetAction.presets.first?.name ?? ""
         }
         for preset in KeyCodeHelper.PresetAction.presets {
-            if preset.action.keyCode == action.keyCode && (preset.action.modifiers ?? []) == (action.modifiers ?? []) {
-                return preset.name
+            if preset.action.type == action.type {
+                if action.type == .system && preset.action.systemAction == action.systemAction {
+                    return preset.name
+                }
+                if action.type == .shortcut && preset.action.keyCode == action.keyCode && (preset.action.modifiers ?? []) == (action.modifiers ?? []) {
+                    return preset.name
+                }
             }
         }
         return KeyCodeHelper.PresetAction.presets.first?.name ?? ""

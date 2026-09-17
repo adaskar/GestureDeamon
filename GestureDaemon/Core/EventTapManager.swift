@@ -154,6 +154,7 @@ public final class EventTapManager {
         guard motionEventTap == nil else { return }
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         let motionMask: CGEventMask = (1 << CGEventType.mouseMoved.rawValue)
+                                     | (1 << CGEventType.scrollWheel.rawValue)
 
         guard let mTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -424,10 +425,20 @@ public final class EventTapManager {
             return Unmanaged.passRetained(event)
         }
 
-        guard type == .mouseMoved, stateMachine.isEngaged else {
-            if !stateMachine.isEngaged {
-                stopMotionTap()
+        guard stateMachine.isEngaged else {
+            stopMotionTap()
+            return Unmanaged.passRetained(event)
+        }
+
+        if type == .scrollWheel {
+            let deltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
+            if deltaY != 0 {
+                _ = stateMachine.handleScrollWheel(deltaY: deltaY)
             }
+            return nil // Swallow scroll wheel event while thumb button is engaged
+        }
+
+        guard type == .mouseMoved else {
             return Unmanaged.passRetained(event)
         }
 

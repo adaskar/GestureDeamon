@@ -280,6 +280,91 @@ public enum KeyCodeHelper {
                 )
             ),
             PresetAction(
+                name: "Volume Up",
+                description: "Increases system audio volume with native macOS HUD",
+                action: ActionDefinition(
+                    type: .system,
+                    systemAction: "volumeUp",
+                    comment: "Volume Up"
+                )
+            ),
+            PresetAction(
+                name: "Volume Down",
+                description: "Decreases system audio volume with native macOS HUD",
+                action: ActionDefinition(
+                    type: .system,
+                    systemAction: "volumeDown",
+                    comment: "Volume Down"
+                )
+            ),
+            PresetAction(
+                name: "Mute / Unmute",
+                description: "Toggles system audio mute",
+                action: ActionDefinition(
+                    type: .system,
+                    systemAction: "mute",
+                    comment: "Mute / Unmute"
+                )
+            ),
+            PresetAction(
+                name: "Brightness Up",
+                description: "Increases display brightness with native macOS HUD",
+                action: ActionDefinition(
+                    type: .system,
+                    systemAction: "brightnessUp",
+                    comment: "Brightness Up"
+                )
+            ),
+            PresetAction(
+                name: "Brightness Down",
+                description: "Decreases display brightness with native macOS HUD",
+                action: ActionDefinition(
+                    type: .system,
+                    systemAction: "brightnessDown",
+                    comment: "Brightness Down"
+                )
+            ),
+            PresetAction(
+                name: "Next Tab",
+                description: "Switches to next tab in browsers and IDEs (⌘⇧])",
+                action: ActionDefinition(
+                    type: .shortcut,
+                    keyCode: 30,
+                    modifiers: ["Command", "Shift"],
+                    comment: "Next Tab (Cmd+Shift+])"
+                )
+            ),
+            PresetAction(
+                name: "Previous Tab",
+                description: "Switches to previous tab in browsers and IDEs (⌘⇧[)",
+                action: ActionDefinition(
+                    type: .shortcut,
+                    keyCode: 33,
+                    modifiers: ["Command", "Shift"],
+                    comment: "Previous Tab (Cmd+Shift+[)"
+                )
+            ),
+            PresetAction(
+                name: "Zoom In",
+                description: "Zooms in current document or page (⌘=)",
+                action: ActionDefinition(
+                    type: .shortcut,
+                    keyCode: 24,
+                    modifiers: ["Command"],
+                    comment: "Zoom In (Cmd+=)"
+                )
+            ),
+            PresetAction(
+                name: "Zoom Out",
+                description: "Zooms out current document or page (⌘-)",
+                action: ActionDefinition(
+                    type: .shortcut,
+                    keyCode: 27,
+                    modifiers: ["Command"],
+                    comment: "Zoom Out (Cmd+-)"
+                )
+            ),
+            PresetAction(
                 name: "Navigation Forward",
                 description: "Navigates forward in Web Browsers, Finder, and IDEs (⌘])",
                 action: ActionDefinition(
