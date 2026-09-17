@@ -123,6 +123,7 @@ public struct AppConfig: Codable, Equatable {
     public var deadzoneRadius: Double
     public var gestureWindowMs: Double?
     public var showMenuBarIcon: Bool?
+    public var menuBarIconStyle: String?
     public var swallowTriggerEvents: Bool
     public var clickAction: ActionDefinition?
     public var dragLeftAction: ActionDefinition?
@@ -155,6 +156,7 @@ public struct AppConfig: Codable, Equatable {
         deadzoneRadius: Double = 8.0,
         gestureWindowMs: Double? = 75.0,
         showMenuBarIcon: Bool? = true,
+        menuBarIconStyle: String? = "standard",
         swallowTriggerEvents: Bool = true,
         clickAction: ActionDefinition? = nil,
         dragLeftAction: ActionDefinition? = nil,
@@ -178,6 +180,7 @@ public struct AppConfig: Codable, Equatable {
         self.deadzoneRadius = deadzoneRadius
         self.gestureWindowMs = gestureWindowMs
         self.showMenuBarIcon = showMenuBarIcon
+        self.menuBarIconStyle = menuBarIconStyle
         self.swallowTriggerEvents = swallowTriggerEvents
         self.clickAction = clickAction
         self.dragLeftAction = dragLeftAction
@@ -203,6 +206,7 @@ public struct AppConfig: Codable, Equatable {
         case deadzoneRadius = "DeadzoneRadius"
         case gestureWindowMs = "GestureWindowMs"
         case showMenuBarIcon = "ShowMenuBarIcon"
+        case menuBarIconStyle = "MenuBarIconStyle"
         case swallowTriggerEvents = "SwallowTriggerEvents"
         case clickAction = "ClickAction"
         case dragLeftAction = "DragLeftAction"
@@ -383,6 +387,12 @@ public final class ConfigManager {
     public func updateShowMenuBarIcon(_ show: Bool) {
         var updated = activeConfig
         updated.showMenuBarIcon = show
+        try? saveConfiguration(updated)
+    }
+
+    public func updateMenuBarIconStyle(_ style: String) {
+        var updated = activeConfig
+        updated.menuBarIconStyle = style
         try? saveConfiguration(updated)
     }
 

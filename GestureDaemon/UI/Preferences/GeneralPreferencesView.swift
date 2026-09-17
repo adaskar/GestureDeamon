@@ -415,6 +415,30 @@ public struct GeneralPreferencesView: View {
                 ))
                 .font(.subheadline)
 
+                if viewModel.config.showMenuBarIcon ?? true {
+                    HStack {
+                        Label("Menu Bar Icon", systemImage: "paintbrush")
+                            .font(.subheadline)
+
+                        Spacer()
+
+                        Picker("", selection: Binding(
+                            get: { viewModel.config.menuBarIconStyle ?? "standard" },
+                            set: { style in
+                                viewModel.config.menuBarIconStyle = style
+                                ConfigManager.shared.updateMenuBarIconStyle(style)
+                                MenuBarController.shared.updateMenuBarIcon()
+                            }
+                        )) {
+                            Label("Gesture Icon", systemImage: "cursorarrow.motionlines").tag("standard")
+                            Label("Mouse Battery", systemImage: "battery.75").tag("battery")
+                            Label("Battery + %", systemImage: "percent").tag("batteryWithPercentage")
+                        }
+                        .pickerStyle(MenuPickerStyle())
+                        .frame(maxWidth: 190)
+                    }
+                }
+
                 Text("Keep GestureDaemon accessible from the top menu bar. When disabled, re-launch GestureDaemon from Applications or Spotlight to reveal settings.")
                     .font(.caption)
                     .foregroundColor(.secondary)

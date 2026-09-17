@@ -32,9 +32,24 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             if show {
                 self.isTemporarilyVisible = false
                 self.createStatusItemIfNeeded()
+                self.updateMenuBarIcon()
             } else if !self.isTemporarilyVisible {
                 self.removeStatusItem()
             }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .hidBatteryStatusDidChange,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.updateMenuBarIcon()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: .hidHardwareCapabilitiesDidChange,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.updateMenuBarIcon()
         }
     }
 
@@ -55,7 +70,50 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         guard statusItem == nil else { return }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = item.button {
+        let menu = NSMenu()
+        menu.delegate = self
+        item.menu = menu
+        self.statusItem = item
+        updateMenuBarIcon()
+        Log.info("Menu bar status item created.")
+    }
+
+    public func updateMenuBarIcon() {
+        guard let button = statusItem?.button else { return }
+
+        let style = ConfigManager.shared.activeConfig.menuBarIconStyle ?? "standard"
+
+        if style == "battery" || style == "batteryWithPercentage" {
+            if let battery = HIDPlusPlusManager.shared.batteryInfo {
+                let iconName: String
+                if battery.isCharging {
+                    iconName = "battery.100.bolt"
+                } else {
+                    switch battery.percentage {
+                    case 85...100: iconName = "battery.100"
+                    case 60..<85:  iconName = "battery.75"
+                    case 35..<60:  iconName = "battery.50"
+                    case 15..<35:  iconName = "battery.25"
+                    default:       iconName = "battery.0"
+                    }
+                }
+                if let image = NSImage(systemSymbolName: iconName, accessibilityDescription: "Mouse Battery") {
+                    image.isTemplate = true
+                    button.image = image
+                }
+                if style == "batteryWithPercentage" {
+                    button.title = " \(battery.percentage)%"
+                } else {
+                    button.title = ""
+                }
+            } else {
+                if let image = NSImage(systemSymbolName: "computermouse.fill", accessibilityDescription: "Mouse") {
+                    image.isTemplate = true
+                    button.image = image
+                }
+                button.title = ""
+            }
+        } else {
             if let image = NSImage(systemSymbolName: "cursorarrow.motionlines", accessibilityDescription: "GestureDaemon") {
                 image.isTemplate = true
                 button.image = image
@@ -65,13 +123,10 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             } else {
                 button.title = "⌘G"
             }
+            button.title = ""
         }
 
-        let menu = NSMenu()
-        menu.delegate = self
-        item.menu = menu
-        self.statusItem = item
-        Log.info("Menu bar status item created.")
+        button.appearsDisabled = isPaused
     }
 
     private func removeStatusItem() {
@@ -150,6 +205,21 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             menu.addItem(hideItem)
         }
 
+        // Icon Style Toggle (Static Gesture Icon vs Mouse Battery Icon)
+        let currentStyle = ConfigManager.shared.activeConfig.menuBarIconStyle ?? "standard"
+        let isBatterySelected = (currentStyle != "standard")
+        let batteryToggleItem = NSMenuItem(
+            title: isBatterySelected ? "Use Static Gesture Icon" : "Use Mouse Battery Icon",
+            action: #selector(toggleBatteryMenuBarIcon),
+            keyEquivalent: ""
+        )
+        batteryToggleItem.image = NSImage(
+            systemSymbolName: isBatterySelected ? "cursorarrow.motionlines" : "battery.75",
+            accessibilityDescription: nil
+        )
+        batteryToggleItem.target = self
+        menu.addItem(batteryToggleItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // Pause / Resume Toggle
@@ -224,6 +294,13 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func rehideTemporarilyShownIcon() {
         isTemporarilyVisible = false
         removeStatusItem()
+    }
+
+    @objc private func toggleBatteryMenuBarIcon() {
+        let currentStyle = ConfigManager.shared.activeConfig.menuBarIconStyle ?? "standard"
+        let nextStyle = (currentStyle == "standard") ? "battery" : "standard"
+        ConfigManager.shared.updateMenuBarIconStyle(nextStyle)
+        updateMenuBarIcon()
     }
 
     @objc private func togglePause() {
