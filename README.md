@@ -3,13 +3,13 @@
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-black?style=flat-square&logo=apple)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange?style=flat-square&logo=swift)](https://developer.apple.com/swift/)
 [![Architecture](https://img.shields.io/badge/Architecture-Universal%20(Apple%20Silicon%20%2B%20Intel)-blue?style=flat-square)](https://developer.apple.com)
-[![CPU Usage](https://img.shields.io/badge/Idle%20CPU-0.0%25-brightgreen?style=flat-square)](https://github.com)
-[![Dependencies](https://img.shields.io/badge/Dependencies-Zero-success?style=flat-square)](https://github.com)
+[![Idle CPU](https://img.shields.io/badge/Idle%20CPU-0.0%25-brightgreen?style=flat-square)](https://github.com/adaskar/GestureDeamon)
+[![Dependencies](https://img.shields.io/badge/Dependencies-Zero-success?style=flat-square)](https://github.com/adaskar/GestureDeamon)
 [![License](https://img.shields.io/badge/License-MIT-purple?style=flat-square)](LICENSE)
 
 > **Ultra-lightweight, zero-telemetry native macOS background daemon and menu bar utility replacing Logitech Options+ for multi-button mice.**
 
-Built in 100% pure Swift with **zero external dependencies**. Consumes **0.0% idle CPU** and less than 15 MB of RAM while delivering instant, sub-millisecond Mission Control, App Exposé, Spaces navigation, and universal side-button history controls.
+Built in 100% pure Swift with **zero external dependencies**. Consumes **0.0% idle CPU** and less than 15 MB of RAM while delivering instant, sub-millisecond Mission Control, App Exposé, Spaces navigation, thumb-scroll volume chording, and universal side-button history controls.
 
 ---
 
@@ -21,12 +21,15 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 
 | Metric | Logitech Options+ | GestureDaemon |
 |---|---|---|
-| **Idle CPU Usage** | 1% – 5% (constant wakeups) | **0.0%** (zero IPC wakeups) |
+| **Idle CPU Usage** | 1% – 5% (constant wakeups) | **0.0%** (zero IPC wakeups via ephemeral taps) |
 | **Memory Footprint** | 300 MB – 800 MB+ | **< 15 MB** |
 | **Dependencies / Runtimes** | Node.js, Electron, Python, Crashpad | **Zero** (Pure Swift & Apple SPI) |
 | **Network Telemetry** | Active tracking & analytics | **100% Offline & Private** |
-| **Configuration** | Heavy cloud-synced GUI | Clean XML/Plist with **Live Hot-Reloading** |
+| **Preferences & Tuning** | Heavy cloud-synced web UI | **Native SwiftUI Settings (`⌘,`)** + Live Plist Hot-Reload |
+| **Calibration & Testing** | None | **Live Visual Calibration Tester Canvas** |
 | **Space Transitions** | Emulated keys (frequent escape codes) | Native WindowServer Symbolic HotKeys |
+| **Scroll Wheel Chording** | Complex / Laggy | **Native HUD Volume Up / Down (Instant & Zero Jitter)** |
+| **Battery Monitoring** | High-overhead polling service | Native HID++ 2.0 (`0x1000`/`0x1004`) in Menu Bar |
 
 ---
 
@@ -35,11 +38,16 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 - ⚡️ **True 0.0% Idle CPU**: Ephemeral event-tap lifecycle guarantees zero IPC wakeups and zero context switches during normal mouse and trackpad pointer motion.
 - 🪟 **Fluid Spaces & Mission Control Transitions**: Uses reverse-engineered Apple CoreGraphics Services (CGS) SPI with `NX_SECONDARYFNMASK` modifier injection for flawless native Desktop switching.
 - 🎯 **Native Dock Integration**: Instant Mission Control and App Exposé via private `CoreDockSendNotification`.
+- 🔊 **Thumb Gesture + Scroll Wheel Chording**: Hold the thumb button and scroll the wheel to instantly adjust **System Volume Up/Down** with native macOS bezel HUD overlays. Swallows scroll events cleanly so pages never jitter.
+- 🎛 **Native SwiftUI Preferences (`⌘,`)**: Full graphical settings interface with 5 tabs: **Gestures**, **Side Buttons**, **App Profiles**, **General & Tuning**, and an interactive **Live Calibration Canvas**.
+- 🧪 **Live Tester Canvas**: Real-time visual feedback showing mouse cursor displacement vectors, threshold & deadzone boundary rings, button press state badges, and live gesture recognition.
+- ⌨️ **Interactive Shortcut Recorder**: Effortlessly record custom shortcuts with automatic layout normalization across international keyboards (QWERTY, AZERTY, Turkish Q, Colemak, etc.).
+- 🔋 **Live Battery & Hardware Telemetry**: Native Logitech HID++ 2.0 query engine (`0x1000`/`0x1004`) reports mouse battery percentage and charging state directly in the macOS menu bar.
 - 🧼 **Modifier Sanitization**: Unconditionally swallows Logitech's hardware fallback `Cmd+Option+Tab` thumb macro and flushes system modifiers—preventing VS Code or browser tab bars from stealing focus.
 - 🧭 **Universal Side Navigation (Back & Forward)**: Translates side buttons (Buttons 3 & 4) into instant history navigation (`Cmd+[` / `Cmd+]`) across Safari, Chrome, and Finder, with smart IDE navigation (`Ctrl+-` / `Ctrl+Shift+-`) in Visual Studio Code.
 - 📱 **Per-Application Contextual Profiles**: Dynamically override gestures and button bindings based on the active foreground application (e.g. scrub timelines in video editors, navigate history in browsers, toggle terminal in IDEs).
 - 🎛 **Live Hot-Reloading (`config.plist`)**: Edit your configuration in `~/.config/GestureDaemon/config.plist` and changes take effect immediately without restarting.
-- 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), "Hide Menu Bar Icon" mode with single-instance reopen recovery, and modern `SMAppService` launch-at-login integration.
+- 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), customizable menu bar styles ("standard", "minimal", "percentage", "hidden"), and modern `SMAppService` launch-at-login integration.
 - 📡 **Dual-Transport HID++ (USB & Direct Bluetooth LE)**: Seamlessly detects and controls Logitech mice over USB Unifying/Bolt receivers (`0xFF00`) or direct **Bluetooth Low Energy** connections (`0xFF43:0x0202`), automatically diverting the thumb button with zero setup.
 - 🌙 **Sleep / Wake & Power Resilience**: Automatic self-healing power management (`SleepWakeManager`) that detects system sleep, screen lock, and display power-offs, automatically re-enables event taps, flushes stale Bluetooth handles, and re-diverts hardware buttons seamlessly upon wake.
 - 🪵 **Built-in Diagnostic Logging**: Real-time event tracking and live logging at `~/.config/GestureDaemon/daemon.log` for easy troubleshooting.
@@ -54,8 +62,8 @@ Compiling locally builds a native application specifically signed for your machi
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/guru/GestureDaemon.git
-cd GestureDaemon
+git clone https://github.com/adaskar/GestureDeamon.git
+cd GestureDeamon
 
 # 2. Build universal binary and install directly to /Applications
 make install
@@ -94,7 +102,7 @@ Once installed, launch **GestureDaemon** from `/Applications` or Spotlight, gran
 > Because GestureDaemon is an open-source, non-commercial project developed without an Apple Developer Program subscription ($99/yr), releases are ad-hoc codesigned. When downloaded via a browser, macOS will quarantine the bundle and prevent immediate opening (*"cannot be opened because Apple cannot check it for malicious software"*).
 
 #### Step-by-Step Installation:
-1. Download **`GestureDaemon.dmg`** from the [Releases](https://github.com/guru/GestureDaemon/releases) page.
+1. Download **`GestureDaemon.dmg`** from the [Releases](https://github.com/adaskar/GestureDeamon/releases) page.
 2. Double-click the DMG and drag **`GestureDaemon.app`** into your `/Applications` folder.
 3. Attempt to launch **GestureDaemon** once from `/Applications` or Spotlight (you will see the Gatekeeper prompt; click **Done** or **Cancel**).
 4. Authorize the application:
@@ -112,8 +120,8 @@ Once installed, launch **GestureDaemon** from `/Applications` or Spotlight, gran
      ```bash
      open /Applications/GestureDaemon.app
      ```
-5. When prompted, grant Accessibility in **System Settings → Privacy & Security → Accessibility**.
-6. Click the menu bar icon to toggle **Launch at Login**.
+5. When prompted, grant Accessibility in **System Settings → Privacy & Security → Accessibility** (and Input Monitoring if using direct Bluetooth LE).
+6. Click the menu bar icon or press `⌘,` to configure your preferences and enable **Launch at Login**.
 
 ---
 
@@ -121,28 +129,34 @@ Once installed, launch **GestureDaemon** from `/Applications` or Spotlight, gran
 
 Optimized out-of-the-box for multi-button mice including the **Logitech M720 Triathlon**, **MX Master 2S / 3 / 3S**, and standard 5-button mice:
 
-### 1. Thumb Button Gestures (Hold & Flick)
+### 1. Thumb Button Gestures & Wheel Chording
 
-Hold the **Thumb Gesture Button** (or wrist-flick) and release:
+Hold the **Thumb Gesture Button** (or wrist-flick / scroll) and release:
 
 ```
                     ▲
              [ Mission Control ]
                     |
 [ Space Right ] ◀── ● ──▶ [ Space Left ]
-  (Drag Left)       |     (Drag Right)
+  (Flick Left)      |     (Flick Right)
                     ▼
-              [ App Exposé ]
+               [ App Exposé ]
+
+  ═════════════════════════════════════
+  [Thumb + Scroll Up]   ▲  Volume Up   (Native HUD)
+  [Thumb + Scroll Down] ▼  Volume Down (Native HUD)
 ```
 
-| Gesture Motion | Default Action | Technical Implementation |
+| Action Trigger | Default Action | Technical Implementation |
 |---|---|---|
 | **Stationary Tap / Click** | **Mission Control** | `CoreDockSendNotification("com.apple.expose.awake")` |
 | **Wrist-Flick Left** | **Switch to Right Space** | CGS Symbolic HotKey `81` (`Ctrl + Right`) |
 | **Wrist-Flick Right** | **Switch to Left Space** | CGS Symbolic HotKey `79` (`Ctrl + Left`) |
 | **Wrist-Flick Down** | **App Exposé** | `CoreDockSendNotification("com.apple.expose.front.awake")` |
+| **Thumb + Scroll Up** | **Volume Up** | Native macOS Media Key `NX_KEYTYPE_SOUND_UP` with bezel HUD |
+| **Thumb + Scroll Down** | **Volume Down** | Native macOS Media Key `NX_KEYTYPE_SOUND_DOWN` with bezel HUD |
 
-*Timing: 75 ms evaluation window. Threshold: 35 pt. Deadzone: 8 pt.*
+*Default Timing: 75 ms evaluation window. Threshold: 35 pt. Deadzone: 8 pt.*
 
 ### 2. Side Navigation Buttons
 
@@ -153,9 +167,27 @@ Hold the **Thumb Gesture Button** (or wrist-flick) and release:
 
 ---
 
-## ⚙️ Configuration
+## 🖥️ Preferences & Live Calibration
 
-GestureDaemon stores your settings in a clean, human-readable property list at:
+Press **`⌘,`** or click **Preferences...** in the menu bar to open the native SwiftUI settings window:
+
+- **Gestures Tab**: Configure actions for Click, Drag Left, Drag Right, Drag Up, Drag Down, Scroll Up, and Scroll Down.
+- **Side Buttons Tab**: Customize Back and Forward buttons with custom key shortcuts, application launches, or terminal commands.
+- **App Profiles Tab**: Set custom per-application overrides (e.g. tab cycling in Safari, timeline scrubbing in video editors, terminal toggling in VS Code).
+- **General & Tuning Tab**:
+  - Sensitivity sliders: Drag Threshold (points), Deadzone Radius (points), Gesture Timing Window (ms).
+  - Launch at Login toggle (`SMAppService`).
+  - Menu Bar style selector: `Standard (Icon + Battery)`, `Minimal Icon`, `Percentage Only`, or `Hidden`.
+  - Diagnostics and Log Level selection (`Debug`, `Info`, `Error`, `None`).
+  - Real-time macOS Accessibility & Input Monitoring permission badges with one-click fix buttons.
+- **Live Tester Tab**:
+  - Interactive real-time canvas visualizing cursor motion vectors, deadzone ring, threshold boundary, button states, gesture direction resolution, and scroll chording feedback.
+
+---
+
+## ⚙️ Configuration File (`config.plist`)
+
+All preferences are stored in a human-readable property list at:
 ```bash
 ~/.config/GestureDaemon/config.plist
 ```
@@ -165,53 +197,60 @@ To edit it anytime, click the Menu Bar icon and select **Open Configuration File
 open -e ~/.config/GestureDaemon/config.plist
 ```
 
-> **Hot-Reloading**: GestureDaemon monitors the file descriptor. The millisecond you save changes, settings are applied live without needing to restart the daemon.
+> **Hot-Reloading**: GestureDaemon monitors the file descriptor. The millisecond you save changes, settings are applied live without needing to restart the daemon. Any change made in the SwiftUI Preferences GUI automatically synchronizes with `config.plist`.
 
-### Example: Per-Application Overrides
-
-You can override gestures and buttons for specific applications using their bundle identifier:
+### Example: Customizing Gestures & Wheel Chording
 
 ```xml
-<key>Applications</key>
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
 <dict>
-    <!-- Safari: Flick Left/Right cycles tabs instead of switching Spaces -->
-    <key>com.apple.Safari</key>
+    <key>TriggerButtonIndex</key><integer>5</integer>
+    <key>ThresholdDistance</key><real>35.0</real>
+    <key>DeadzoneRadius</key><real>8.0</real>
+    <key>GestureWindowMs</key><real>75.0</real>
+    <key>ShowMenuBarIcon</key><true/>
+    <key>MenuBarIconStyle</key><string>standard</string>
+
+    <!-- Thumb + Scroll Wheel Chording Actions -->
+    <key>ScrollUpAction</key>
     <dict>
-        <key>DragLeftAction</key>
-        <dict>
-            <key>Type</key><string>Shortcut</string>
-            <key>KeyCode</key><integer>33</integer>
-            <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
-            <key>Comment</key><string>Previous Tab (Cmd+Shift+[)</string>
-        </dict>
-        <key>DragRightAction</key>
-        <dict>
-            <key>Type</key><string>Shortcut</string>
-            <key>KeyCode</key><integer>30</integer>
-            <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
-            <key>Comment</key><string>Next Tab (Cmd+Shift+])</string>
-        </dict>
+        <key>Type</key><string>System</string>
+        <key>SystemAction</key><string>VolumeUp</string>
+        <key>Comment</key><string>Volume Up</string>
+    </dict>
+    <key>ScrollDownAction</key>
+    <dict>
+        <key>Type</key><string>System</string>
+        <key>SystemAction</key><string>VolumeDown</string>
+        <key>Comment</key><string>Volume Down</string>
     </dict>
 
-    <!-- Visual Studio Code: Back/Forward navigates editor history -->
-    <key>com.microsoft.VSCode</key>
+    <!-- Per-Application Overrides -->
+    <key>Applications</key>
     <dict>
-        <key>BackButtonAction</key>
+        <!-- Safari: Flick Left/Right cycles tabs instead of switching Spaces -->
+        <key>com.apple.Safari</key>
         <dict>
-            <key>Type</key><string>Shortcut</string>
-            <key>KeyCode</key><integer>24</integer>
-            <key>Modifiers</key><array><string>Control</string></array>
-            <key>Comment</key><string>Navigate Back</string>
-        </dict>
-        <key>ForwardButtonAction</key>
-        <dict>
-            <key>Type</key><string>Shortcut</string>
-            <key>KeyCode</key><integer>24</integer>
-            <key>Modifiers</key><array><string>Control</string><string>Shift</string></array>
-            <key>Comment</key><string>Navigate Forward</string>
+            <key>DragLeftAction</key>
+            <dict>
+                <key>Type</key><string>Shortcut</string>
+                <key>KeyCode</key><integer>33</integer>
+                <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
+                <key>Comment</key><string>Previous Tab (Cmd+Shift+[)</string>
+            </dict>
+            <key>DragRightAction</key>
+            <dict>
+                <key>Type</key><string>Shortcut</string>
+                <key>KeyCode</key><integer>30</integer>
+                <key>Modifiers</key><array><string>Command</string><string>Shift</string></array>
+                <key>Comment</key><string>Next Tab (Cmd+Shift+])</string>
+            </dict>
         </dict>
     </dict>
 </dict>
+</plist>
 ```
 
 ---
@@ -221,13 +260,13 @@ You can override gestures and buttons for specific applications using their bund
 GestureDaemon provides optional diagnostic logging (disabled by default for zero disk I/O and zero idle CPU) and an interactive CLI diagnostic mode:
 
 ### 1. View Live Event Logs
-To activate file logging, set `<key>EnableLogging</key><true/>` in `~/.config/GestureDaemon/config.plist` (you can also set `<key>LogLevel</key>` to `"Debug"`, `"Info"`, or `"Error"`). Then monitor in real time:
+To activate file logging, set `<key>EnableLogging</key><true/>` in `~/.config/GestureDaemon/config.plist` (or select `Debug` in the Preferences window). Then monitor in real time:
 ```bash
 tail -f ~/.config/GestureDaemon/daemon.log
 ```
 
 ### 2. Run Interactive Hardware Diagnostics
-To inspect raw mouse button numbers and modifier keycodes from your physical hardware:
+To inspect raw mouse button numbers, modifier keycodes, and HID reports from your physical hardware:
 ```bash
 make diagnose
 # Or directly:
@@ -235,13 +274,13 @@ make diagnose
 ```
 
 ### 3. Recover Hidden Menu Bar Icon
-If you hid the status bar icon via "Hide Menu Bar Icon", simply launch **GestureDaemon** again from `/Applications` or Spotlight. The running daemon will wake up, temporarily restore the menu bar item, and display the menu.
+If you hid the status bar icon, simply launch **GestureDaemon** again from `/Applications` or Spotlight, or press `⌘,` if the app is active. The running daemon will wake up, temporarily restore the menu bar item, and display the menu.
 
 ---
 
 ## 📚 Complete Documentation
 
-For complete architectural deep-dives, parameter dictionaries, virtual keycode lookup tables, and the upcoming feature roadmap, see:
+For architectural deep-dives, HID++ 2.0 transport internals, parameter dictionaries, virtual keycode lookup tables, and the upcoming feature roadmap, see:
 
 📖 **[Full Architecture & Configuration Guide (DOCUMENTATION.md)](DOCUMENTATION.md)**
 
@@ -250,7 +289,7 @@ For complete architectural deep-dives, parameter dictionaries, virtual keycode l
 ## 🤝 Contributing
 
 Contributions, bug reports, and feature suggestions are welcome!
-1. Fork the repository
+1. Fork the repository (`https://github.com/adaskar/GestureDeamon`)
 2. Create your feature branch (`git checkout -b feature/my-new-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin feature/my-new-feature`)

@@ -52,12 +52,26 @@
         <key>Modifiers</key><array><string>Control</string></array>
         <key>Comment</key><string>Mission Control</string>
     </dict>
+    <!-- Drag Down: App Exposé -->
     <key>DragDownAction</key>
     <dict>
         <key>Type</key><string>Shortcut</string>
         <key>KeyCode</key><integer>125</integer>
         <key>Modifiers</key><array><string>Control</string></array>
         <key>Comment</key><string>App Expose (Ctrl+Down)</string>
+    </dict>
+    <!-- Thumb + Scroll Wheel Chording: Native System Volume Up/Down with HUD -->
+    <key>ScrollUpAction</key>
+    <dict>
+        <key>Type</key><string>System</string>
+        <key>SystemAction</key><string>VolumeUp</string>
+        <key>Comment</key><string>Volume Up</string>
+    </dict>
+    <key>ScrollDownAction</key>
+    <dict>
+        <key>Type</key><string>System</string>
+        <key>SystemAction</key><string>VolumeDown</string>
+        <key>Comment</key><string>Volume Down</string>
     </dict>
 
     <!-- Per-Application Contextual Profiles (override any gestures per app) -->

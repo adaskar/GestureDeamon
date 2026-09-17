@@ -1,3 +1,15 @@
-build
+# Build and release artifacts
+build/
+.build/
+*.dmg
+
+# System & Editor files
 .DS_Store
 *.swp
+*~
+*.log
+
+# Scratch & temporary development files
+scratch/
+*.tmp
+.swiftpm/

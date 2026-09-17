@@ -22,6 +22,8 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
    - [Direct Bluetooth LE HID++ Hardware Engine](#k-direct-bluetooth-le-hid-hardware-engine)
    - [Sleep / Wake & Power Resilience Engine](#l-sleep--wake--power-resilience-engine)
    - [SwiftUI Native Preferences Window & Keycode Resolver](#m-swiftui-native-preferences-window--keycode-resolver)
+   - [Thumb Gesture + Scroll Wheel Chording Engine](#n-thumb-gesture--scroll-wheel-chording-engine)
+   - [HID++ 2.0 Live Battery & Charging Telemetry](#o-hid-20-live-battery--charging-telemetry)
 2. [Complete Configuration Guide (config.plist)](#2-complete-configuration-guide-configplist)
    - [Configuration Locations & Priority](#configuration-locations--priority)
    - [Live Hot-Reloading](#live-hot-reloading)
@@ -144,6 +146,43 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
   - Changes in the UI auto-save to `~/.config/GestureDaemon/config.plist` using `PropertyListEncoder(outputFormat: .xml)`.
   - External edits to `config.plist` are detected by the DispatchSource file monitor and instantly propagate to the open preferences window.
 
+### N. Thumb Gesture + Scroll Wheel Chording Engine
+- **Gesture Chording Architecture**:
+  - While holding down the thumb gesture button, rolling the mouse scroll wheel triggers configurable chording actions (`ScrollUpAction` and `ScrollDownAction`).
+  - By default, mapped to **Native System Volume Up / Down** with macOS system bezel HUD overlays.
+- **Low-Level Media Key Synthesizer (`ActionDispatcher`)**:
+  - Unlike simplistic AppleScript volume commands (which introduce 50–150ms execution overhead and fork child processes), GestureDaemon injects raw macOS media key events:
+    ```swift
+    // NX_KEYTYPE_SOUND_UP (0), NX_KEYTYPE_SOUND_DOWN (1)
+    let data1 = Int((key << 16) | (down ? 0xa00 : 0xb00))
+    NSEvent.otherEvent(with: .systemDefined, subtype: 8, data1: data1, data2: -1)
+    ```
+  - Dispatched directly to `.cghidEventTap`, triggering the exact same native volume bezel HUD as physical keyboard media keys with **zero latency**.
+- **Wheel Direction Inversion & Natural Scrolling**:
+  - Calibrated so that physically rolling the wheel forward/up increases volume (`ScrollUpAction`), while rolling backward/down decreases volume (`ScrollDownAction`).
+- **Complete Scroll Suppression**:
+  - When the thumb button is engaged, raw `.scrollWheel` events are unconditionally swallowed by the event tap (`return nil`). Web pages, spreadsheets, and document windows never jitter or scroll while adjusting volume.
+- **Motion Damping & Gesture Protection**:
+  - Spinning the wheel frequently imparts slight physical pointer motion. The state machine actively resets accumulated drag vectors (`accumulatedDeltaX = 0`, `accumulatedDeltaY = 0`) during scroll ticks, preventing accidental directional flicks while adjusting volume.
+- **Dynamic Safety Timer Extension**:
+  - Each scroll tick marks the gesture as consumed and extends the safety timer by +5.0s, allowing smooth, continuous volume adjustments without timeout interruption.
+
+### O. HID++ 2.0 Live Battery & Charging Telemetry
+- **Dynamic Feature Resolution**:
+  - `HIDPlusPlusManager` queries the connected Logitech device via Root feature index `0x0000` to locate feature `0x1004` (`UNIFIED_BATTERY`) or fallback feature `0x1000` (`BATTERY_STATUS`).
+- **Dual Transport Query Pipeline**:
+  - Formats HID++ 2.0 Short (7-byte) and Long (20-byte) report packets routed through USB Unifying/Bolt receivers (`0xFF00`) or direct Bluetooth LE characteristics (`0xFF43:0x0202`).
+- **Asynchronous Parsing & Notification**:
+  - Extracts battery percentage (0–100%) and external power / charging state (`isCharging: Bool`).
+  - Broadcasts `.hidBatteryStatusDidChange` across `NotificationCenter.default`.
+- **Menu Bar Integration**:
+  - `MenuBarController` dynamically updates the status item title and tooltip with real-time battery level and charging indicator (`⚡`).
+  - Configurable display styles via `MenuBarIconStyle`:
+    - `"standard"`: Status icon + battery percentage.
+    - `"minimal"`: Status icon only (battery level shown on menu click/tooltip).
+    - `"percentage"`: Percentage badge only.
+    - `"hidden"`: Headless background daemon.
+
 ---
 
 ## 2. Complete Configuration Guide (config.plist)
@@ -202,6 +241,10 @@ Below is the annotated XML schema for `config.plist`:
     <key>ShowMenuBarIcon</key>
     <true/>
 
+    <!-- Menu bar display style: "standard" (Icon+Battery), "minimal", "percentage", "hidden" -->
+    <key>MenuBarIconStyle</key>
+    <string>standard</string>
+
     <!-- Whether to prevent the trigger button from passing through to foreground apps (Default: true) -->
     <key>SwallowTriggerEvents</key>
     <true/>
@@ -231,6 +274,20 @@ Below is the annotated XML schema for `config.plist`:
 
     <!-- Optional custom action for Forward button (omitted = smart navigation forward: Cmd+] / VS Code Ctrl+Shift+-) -->
     <!-- <key>ForwardButtonAction</key><dict> ... </dict> -->
+
+    <!-- Thumb + Scroll Wheel Chording Actions (Native macOS Bezel HUD Volume) -->
+    <key>ScrollUpAction</key>
+    <dict>
+        <key>Type</key><string>System</string>
+        <key>SystemAction</key><string>VolumeUp</string>
+        <key>Comment</key><string>Volume Up</string>
+    </dict>
+    <key>ScrollDownAction</key>
+    <dict>
+        <key>Type</key><string>System</string>
+        <key>SystemAction</key><string>VolumeDown</string>
+        <key>Comment</key><string>Volume Down</string>
+    </dict>
 
     <!-- Base Actions (Executed when not overridden by Applications profiles) -->
     <!-- Click: Mission Control (Native CoreDock Notification) -->
@@ -307,18 +364,23 @@ Below is the annotated XML schema for `config.plist`:
 | `DeadzoneRadius` | Real | `8.0` | Radius around the starting point where movement is ignored. Prevents hand tremor from turning a stationary click into an accidental swipe. |
 | `GestureWindowMs` | Real | `75.0` | Evaluation window in milliseconds. If the button is released or remains stationary within this window, `ClickAction` fires. If swiped beyond `ThresholdDistance` within this window, the corresponding directional action fires immediately. |
 | `ShowMenuBarIcon` | Boolean | `true` | When `true`, displays the status icon in the macOS menu bar. When `false`, runs headlessly in the background. |
+| `MenuBarIconStyle` | String | `"standard"` | Visual presentation in menu bar: `"standard"` (icon + battery %), `"minimal"` (icon only), `"percentage"` (battery % only), or `"hidden"`. |
 | `SwallowTriggerEvents`| Boolean | `true` | When `true`, prevents the underlying button press from reaching the frontmost application. |
 | `EnableSideButtons` | Boolean | `true` | When `true`, intercepts mouse side buttons and converts them to navigation actions. |
 | `BackButtonIndex` | Integer | `3` | Button index representing the physical Back button (default `3`). |
 | `ForwardButtonIndex` | Integer | `4` | Button index representing the physical Forward button (default `4`). |
 | `BackButtonAction` | Dictionary | *Smart Back* | Custom action for Back button. If omitted, uses intelligent Back (`Cmd + [` in browsers/Finder, `Ctrl + -` in VS Code). |
 | `ForwardButtonAction` | Dictionary | *Smart Forward* | Custom action for Forward button. If omitted, uses intelligent Forward (`Cmd + ]` in browsers/Finder, `Ctrl + Shift + -` in VS Code). |
+| `ScrollUpAction` | Dictionary | *Volume Up* | Action fired when scrolling up while holding the thumb button. Default: System Volume Up with native bezel HUD. |
+| `ScrollDownAction` | Dictionary | *Volume Down* | Action fired when scrolling down while holding the thumb button. Default: System Volume Down with native bezel HUD. |
+| `EnableLogging` | Boolean | `false` | When `true`, enables file logging to `~/.config/GestureDaemon/daemon.log`. Keep `false` for 0.0% idle disk I/O. |
+| `LogLevel` | String | `"Info"` | Granular diagnostic log level: `"Debug"`, `"Info"`, `"Error"`, or `"None"`. |
 
 ---
 
 ### Action Types & Syntax
 
-Every gesture slot (`ClickAction`, `DragLeftAction`, `DragRightAction`, `DragUpAction`, `DragDownAction`) accepts one of three action types:
+Every gesture slot (`ClickAction`, `DragLeftAction`, `DragRightAction`, `DragUpAction`, `DragDownAction`, `ScrollUpAction`, `ScrollDownAction`, `BackButtonAction`, `ForwardButtonAction`) accepts one of four action types:
 
 #### 1. Shortcut (`Type = Shortcut`)
 Sends simulated keystrokes to the system or invokes native macOS WindowServer / Dock actions.
@@ -343,7 +405,24 @@ When configured with modifier `["Control"]`, the following keycodes leverage hig
 - **`KeyCode 123` (Ctrl + Left)**: Move Left a Space (Native CGS HotKey `79`)
 - **`KeyCode 124` (Ctrl + Right)**: Move Right a Space (Native CGS HotKey `81`)
 
-#### 2. Application (`Type = Application`)
+#### 2. System (`Type = System`)
+Dispatches native macOS hardware media keys directly via `.cghidEventTap` system-defined events, complete with native macOS bezel HUDs:
+
+```xml
+<dict>
+    <key>Type</key><string>System</string>
+    <key>SystemAction</key><string>VolumeUp</string>
+</dict>
+```
+
+*Supported System Actions*:
+- `"VolumeUp"`: Native System Volume Up (`NX_KEYTYPE_SOUND_UP`) with bezel overlay
+- `"VolumeDown"`: Native System Volume Down (`NX_KEYTYPE_SOUND_DOWN`) with bezel overlay
+- `"Mute"`: Native Audio Mute toggle (`NX_KEYTYPE_MUTE`)
+- `"BrightnessUp"`: Display Brightness Up (`NX_KEYTYPE_BRIGHTNESS_UP`)
+- `"BrightnessDown"`: Display Brightness Down (`NX_KEYTYPE_BRIGHTNESS_DOWN`)
+
+#### 3. Application (`Type = Application`)
 Launches or brings to focus an installed macOS application using its bundle identifier.
 
 ```xml
@@ -353,13 +432,13 @@ Launches or brings to focus an installed macOS application using its bundle iden
 </dict>
 ```
 
-#### 3. Command (`Type = Command`)
+#### 4. Command (`Type = Command`)
 Executes an arbitrary shell command or script using `/bin/zsh -c`.
 
 ```xml
 <dict>
     <key>Type</key><string>Command</string>
-    <key>CommandPath</key><string>osascript -e 'set volume output muted not (output muted of (get volume settings))'</string>
+    <key>CommandPath</key><string>say "Gesture activated"</string>
 </dict>
 ```
 
@@ -495,11 +574,11 @@ For custom shortcuts, refer to standard macOS virtual keycodes:
     <key>TriggerButtonIndex</key><integer>5</integer>
     <key>ThresholdDistance</key><real>30.0</real>
 
-    <!-- Click: Toggle Audio Mute via AppleScript -->
+    <!-- Click: Toggle Audio Mute natively via System Media Key -->
     <key>ClickAction</key>
     <dict>
-        <key>Type</key><string>Command</string>
-        <key>CommandPath</key><string>osascript -e 'set volume output muted not (output muted of (get volume settings))'</string>
+        <key>Type</key><string>System</string>
+        <key>SystemAction</key><string>Mute</string>
     </dict>
 
     <!-- Drag Left: Back (Cmd + [) -->
