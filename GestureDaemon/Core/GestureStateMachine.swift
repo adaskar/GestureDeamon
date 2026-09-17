@@ -222,11 +222,12 @@ public final class GestureStateMachine {
         magicGestureTimer?.schedule(deadline: .now() + 5.0)
         buttonSafetyTimer?.schedule(deadline: .now() + 5.0)
 
-        let slot: ActionSlot = deltaY > 0 ? .scrollUp : .scrollDown
+        // Inverted to match physical wheel roll direction
+        let slot: ActionSlot = deltaY < 0 ? .scrollUp : .scrollDown
         let action = ConfigManager.shared.effectiveAction(for: slot)
 
         if isCalibrationMode {
-            onCalibrationEvent?(.scrollChording(isUp: deltaY > 0, action: action))
+            onCalibrationEvent?(.scrollChording(isUp: slot == .scrollUp, action: action))
             return true
         }
 

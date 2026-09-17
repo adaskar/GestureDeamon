@@ -119,6 +119,10 @@ public final class ActionDispatcher {
                 sendMediaKey(2) // NX_KEYTYPE_BRIGHTNESS_UP
             case "brightnessdown":
                 sendMediaKey(3) // NX_KEYTYPE_BRIGHTNESS_DOWN
+            case "zoomin":
+                sendZoom(isZoomIn: true)
+            case "zoomout":
+                sendZoom(isZoomIn: false)
             default:
                 break
             }
@@ -146,6 +150,28 @@ public final class ActionDispatcher {
         }
         postKey(down: true)
         postKey(down: false)
+    }
+
+    /// Post native layout-aware Zoom In/Out shortcut
+    private func sendZoom(isZoomIn: Bool) {
+        let targetChar: Character = isZoomIn ? "+" : "-"
+        let fallbackCode: CGKeyCode = isZoomIn ? 24 : 27 // ANSI '=' or '-'
+        let keypadCode: CGKeyCode = isZoomIn ? 69 : 78   // Keypad '+' or '-'
+
+        // 1. Try to find the exact key on active layout
+        if let match = KeyCodeHelper.findKey(for: targetChar) {
+            var mods = ["Command"]
+            if match.requiresShift {
+                mods.append("Shift")
+            }
+            sendSyntheticShortcut(keyCode: CGKeyCode(match.keyCode), modifiers: mods, unicodeString: String(targetChar))
+        } else {
+            // 2. Fallback: Send layout fallback
+            sendSyntheticShortcut(keyCode: fallbackCode, modifiers: ["Command"], unicodeString: String(targetChar))
+        }
+
+        // Also post keypad zoom event for universal app support (Safari, Chrome, Preview, Finder)
+        sendSyntheticShortcut(keyCode: keypadCode, modifiers: ["Command"], unicodeString: String(targetChar))
     }
 
     /// Post native Dock notification via pre-resolved ApplicationServices SPI (com.apple.expose.awake etc.)
@@ -191,11 +217,11 @@ public final class ActionDispatcher {
         return true
     }
 
-    private func sendSyntheticShortcut(keyCode: CGKeyCode, modifiers: [String]) {
-        Log.info("⚡ [SYNTHETIC SHORTCUT] Injecting keyCode=\(keyCode), modifiers=\(modifiers) into cghidEventTap")
+    private func sendSyntheticShortcut(keyCode: CGKeyCode, modifiers: [String], unicodeString: String? = nil) {
+        Log.info("⚡ [SYNTHETIC SHORTCUT] Injecting keyCode=\(keyCode), modifiers=\(modifiers) into cgSessionEventTap")
 
-        let loc = CGEventTapLocation.cghidEventTap
-        let source = CGEventSource(stateID: .hidSystemState)
+        let loc = CGEventTapLocation.cgSessionEventTap
+        let source = CGEventSource(stateID: .combinedSessionState)
 
         var modKeyCodes: [CGKeyCode] = []
         var flags: CGEventFlags = []
@@ -217,6 +243,13 @@ public final class ActionDispatcher {
             }
         }
 
+        var uniChars: [UniChar] = []
+        if let uStr = unicodeString {
+            uniChars = [UniChar](uStr.utf16)
+        } else if let char = KeyCodeHelper.characterFromCarbon(keyCode: UInt16(keyCode)) {
+            uniChars = [UniChar](char.utf16)
+        }
+
         for modKey in modKeyCodes {
             if let flagEv = CGEvent(keyboardEventSource: source, virtualKey: modKey, keyDown: true) {
                 flagEv.type = .flagsChanged
@@ -231,6 +264,9 @@ public final class ActionDispatcher {
 
         if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true) {
             keyDown.flags = flags
+            if !uniChars.isEmpty {
+                keyDown.keyboardSetUnicodeString(stringLength: uniChars.count, unicodeString: &uniChars)
+            }
             keyDown.post(tap: loc)
         }
 
@@ -238,6 +274,9 @@ public final class ActionDispatcher {
 
         if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) {
             keyUp.flags = flags
+            if !uniChars.isEmpty {
+                keyUp.keyboardSetUnicodeString(stringLength: uniChars.count, unicodeString: &uniChars)
+            }
             keyUp.post(tap: loc)
         }
 
