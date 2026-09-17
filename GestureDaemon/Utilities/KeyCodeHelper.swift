@@ -125,56 +125,6 @@ public enum KeyCodeHelper {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// Dynamically finds the virtual key code and required shift modifier for a given character on the current keyboard layout
-    public static func findKey(for targetChar: Character) -> (keyCode: UInt16, requiresShift: Bool)? {
-        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
-              let layoutDataRef = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else {
-            return nil
-        }
-        let layoutData = unsafeBitCast(layoutDataRef, to: CFData.self)
-        guard let rawPtr = CFDataGetBytePtr(layoutData) else { return nil }
-        let keyboardLayout = rawPtr.withMemoryRebound(to: UCKeyboardLayout.self, capacity: 1) { $0 }
-
-        var deadKeyState: UInt32 = 0
-        var chars = [UniChar](repeating: 0, count: 4)
-
-        // 1. Try unshifted keycodes (0..<128)
-        for k: UInt16 in 0..<128 {
-            var actualLen: Int = 0
-            deadKeyState = 0
-            let status = UCKeyTranslate(
-                keyboardLayout, k, UInt16(kUCKeyActionDisplay), 0,
-                UInt32(LMGetKbdType()), OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                &deadKeyState, 4, &actualLen, &chars
-            )
-            if status == noErr, actualLen > 0 {
-                let str = String(utf16CodeUnits: chars, count: actualLen)
-                if str == String(targetChar) {
-                    return (k, false)
-                }
-            }
-        }
-
-        // 2. Try shifted keycodes (0..<128)
-        for k: UInt16 in 0..<128 {
-            var actualLen: Int = 0
-            deadKeyState = 0
-            let status = UCKeyTranslate(
-                keyboardLayout, k, UInt16(kUCKeyActionDisplay), UInt32(shiftKey >> 8),
-                UInt32(LMGetKbdType()), OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                &deadKeyState, 4, &actualLen, &chars
-            )
-            if status == noErr, actualLen > 0 {
-                let str = String(utf16CodeUnits: chars, count: actualLen)
-                if str == String(targetChar) {
-                    return (k, true)
-                }
-            }
-        }
-
-        return nil
-    }
-
     // MARK: - Modifiers Formatting
 
     public static let standardModifierOrder = ["Control", "Option", "Shift", "Command"]
@@ -392,24 +342,6 @@ public enum KeyCodeHelper {
                     keyCode: 33,
                     modifiers: ["Command", "Shift"],
                     comment: "Previous Tab (Cmd+Shift+[)"
-                )
-            ),
-            PresetAction(
-                name: "Zoom In",
-                description: "Zooms in current document or page (⌘+)",
-                action: ActionDefinition(
-                    type: .system,
-                    systemAction: "zoomIn",
-                    comment: "Zoom In"
-                )
-            ),
-            PresetAction(
-                name: "Zoom Out",
-                description: "Zooms out current document or page (⌘-)",
-                action: ActionDefinition(
-                    type: .system,
-                    systemAction: "zoomOut",
-                    comment: "Zoom Out"
                 )
             ),
             PresetAction(
