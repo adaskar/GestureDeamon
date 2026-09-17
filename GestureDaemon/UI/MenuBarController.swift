@@ -85,22 +85,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
 
         if style == "battery" || style == "batteryWithPercentage" {
             if let battery = HIDPlusPlusManager.shared.batteryInfo {
-                let iconName: String
-                if battery.isCharging {
-                    iconName = "battery.100.bolt"
-                } else {
-                    switch battery.percentage {
-                    case 85...100: iconName = "battery.100"
-                    case 60..<85:  iconName = "battery.75"
-                    case 35..<60:  iconName = "battery.50"
-                    case 15..<35:  iconName = "battery.25"
-                    default:       iconName = "battery.0"
-                    }
-                }
-                if let image = NSImage(systemSymbolName: iconName, accessibilityDescription: "Mouse Battery") {
-                    image.isTemplate = true
-                    button.image = image
-                }
+                button.image = makeMouseBatteryImage(battery: battery)
                 if style == "batteryWithPercentage" {
                     button.title = " \(battery.percentage)%"
                 } else {
@@ -127,6 +112,43 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         }
 
         button.appearsDisabled = isPaused
+    }
+
+    /// Renders a composite template icon combining a mouse silhouette and a battery level icon.
+    /// This makes the menu bar item immediately distinguishable from the host Mac's own battery icon.
+    private func makeMouseBatteryImage(battery: HIDPlusPlusManager.BatteryInfo) -> NSImage {
+        let mouseSymbol = NSImage(systemSymbolName: "computermouse.fill", accessibilityDescription: nil)
+        let batterySymbolName: String
+        if battery.isCharging {
+            batterySymbolName = "battery.100.bolt"
+        } else {
+            switch battery.percentage {
+            case 85...100: batterySymbolName = "battery.100"
+            case 60..<85:  batterySymbolName = "battery.75"
+            case 35..<60:  batterySymbolName = "battery.50"
+            case 15..<35:  batterySymbolName = "battery.25"
+            default:       batterySymbolName = "battery.0"
+            }
+        }
+        let batterySymbol = NSImage(systemSymbolName: batterySymbolName, accessibilityDescription: nil)
+
+        let mouseW: CGFloat = 8
+        let mouseH: CGFloat = 12
+        let gap: CGFloat = 2.5
+        let battW: CGFloat = 16
+        let battH: CGFloat = 10
+        let totalW = mouseW + gap + battW
+        let totalH: CGFloat = 14
+
+        let composite = NSImage(size: NSSize(width: totalW, height: totalH), flipped: false) { _ in
+            let mouseRect = NSRect(x: 0, y: (totalH - mouseH) / 2, width: mouseW, height: mouseH)
+            let battRect = NSRect(x: mouseW + gap, y: (totalH - battH) / 2, width: battW, height: battH)
+            mouseSymbol?.draw(in: mouseRect)
+            batterySymbol?.draw(in: battRect)
+            return true
+        }
+        composite.isTemplate = true
+        return composite
     }
 
     private func removeStatusItem() {

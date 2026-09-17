@@ -149,6 +149,11 @@ public final class HIDPlusPlusManager {
         let res = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         if res == kIOReturnSuccess {
             Log.info("HID++ Manager active (listening for USB Receivers & Bluetooth LE Logitech devices).")
+            if let existing = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice> {
+                for dev in existing {
+                    self.deviceConnected(dev)
+                }
+            }
         } else if res == -536870174 { // 0xe00002e2 = kIOReturnNotPermitted
             Log.error("IOHIDManager access restricted. Input Monitoring permission required for Bluetooth HID++ devices.")
             PermissionHelper.requestInputMonitoring()
@@ -587,10 +592,8 @@ public final class HIDPlusPlusManager {
             return
         }
 
-        Log.debug("📥 BLE InputValue matched: ReportID=0x\(String(format: "%02X", reportId)), len=\(length)")
-
         var bytes: [UInt8]
-        if ptr[0] == reportId && length >= 20 {
+        if ptr[0] == reportId {
             bytes = Array(UnsafeBufferPointer(start: ptr, count: length))
         } else {
             bytes = [reportId] + Array(UnsafeBufferPointer(start: ptr, count: length))
