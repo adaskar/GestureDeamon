@@ -11,9 +11,9 @@ LAUNCH_AGENT_DIR=$(HOME)/Library/LaunchAgents
 AGENT_PLIST=scripts/com.user.gesturedaemon.plist
 SDK=$(shell xcrun --show-sdk-path)
 
-.PHONY: all clean build build-arm64 build-x86_64 build-universal app app-arm64 app-x86_64 app-universal dmg run diagnose install uninstall disable-logi enable-logi stop-logi start-logi
+.PHONY: all clean build build-arm64 build-x86_64 build-universal app app-arm64 app-x86_64 app-universal dmg zip release run diagnose install uninstall disable-logi enable-logi stop-logi start-logi
 
-all: clean app dmg
+all: clean release
 
 build-arm64:
 	@echo "==> Compiling GestureDaemon (arm64 - Apple Silicon)..."
@@ -68,6 +68,15 @@ app-x86_64: build-x86_64
 dmg: app
 	@echo "==> Generating distribution disk image (.dmg)..."
 	@./scripts/create_dmg.sh
+
+zip: app
+	@echo "==> Packaging $(TARGET).zip release archive..."
+	@cd $(BUILD_DIR) && rm -f $(TARGET).zip && zip -r -y -q $(TARGET).zip $(APP_NAME)
+	@echo "==> Distribution zip created at $(BUILD_DIR)/$(TARGET).zip"
+
+release: app dmg zip
+	@echo "==> Distribution artifacts successfully built in $(BUILD_DIR):"
+	@ls -lh $(BUILD_DIR)/$(TARGET).dmg $(BUILD_DIR)/$(TARGET).zip 2>/dev/null || true
 
 run: app
 	@pkill -9 -x $(TARGET) 2>/dev/null || true

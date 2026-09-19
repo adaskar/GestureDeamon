@@ -94,6 +94,15 @@ public struct PreferencesView: View {
                         .font(.title3)
                         .fontWeight(.bold)
 
+                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.1")")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color(NSColor.quaternaryLabelColor))
+                        .cornerRadius(4)
+
                     if let devName = HIDPlusPlusManager.shared.connectedDeviceName {
                         Text(devName)
                             .font(.caption2)

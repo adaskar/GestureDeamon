@@ -54,6 +54,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 let args = CommandLine.arguments
+
+if args.contains("--version") || args.contains("-v") {
+    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.1"
+    let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    print("GestureDaemon v\(version) (build \(build))")
+    exit(0)
+}
+
+if args.contains("--help") || args.contains("-h") {
+    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.1"
+    print("""
+    GestureDaemon v\(version) - Ultra-low latency macOS mouse gestures daemon
+
+    Usage:
+      GestureDaemon              Launch background daemon and menu bar status item
+      GestureDaemon --diagnostics Run in foreground with verbose real-time logging
+      GestureDaemon --version     Print version information and exit
+      GestureDaemon --help        Show this help message and exit
+    """)
+    exit(0)
+}
+
 let isDiagnostics = args.contains("--diagnostics")
 
 if isDiagnostics {
