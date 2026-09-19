@@ -34,3 +34,25 @@ GestureDaemon is a lightweight, zero-telemetry, zero-dependency native macOS dae
 - **🍏 Modern macOS Agent Architecture**: Bundled `.app` with `LSUIElement=true`, status bar controller, customizable menu bar styles ("standard", "battery", "batteryWithPercentage", "hidden"), headless reopen recovery, and `SMAppService` launch-at-login integration.
 - **🏗 Universal Binary**: Single native binary supporting both Apple Silicon (M1/M2/M3/M4) and Intel (x86_64) Macs on macOS 13.0 (Ventura) and later.
 
+#### ⚠️ Gatekeeper & First-Launch Authorization (Not Notarized)
+
+Because GestureDaemon is an open-source utility distributed without an Apple Developer ID subscription ($99/yr), the pre-compiled application is ad-hoc signed and **not notarized by Apple**. When downloaded via a web browser, macOS Gatekeeper will place it in quarantine by default.
+
+To open the app on macOS Ventura, Sonoma, Sequoia, or later, use either method:
+
+- **Option A — System Settings (GUI)**:
+  1. Attempt to open `GestureDaemon.app` once from `/Applications` (macOS will show a security prompt; click **Done** or **Cancel**).
+  2. Open **System Settings** → **Privacy & Security**.
+  3. Scroll down to the **Security** section where you will see: *"GestureDaemon.app was blocked from use because it is not from an identified developer"*.
+  4. Click **"Open Anyway"** and authenticate with your password or Touch ID.
+
+- **Option B — Terminal Quick-Fix (`xattr`)**:
+  Remove the macOS quarantine attribute directly:
+  ```bash
+  xattr -cr /Applications/GestureDaemon.app
+  ```
+  Then launch normally:
+  ```bash
+  open /Applications/GestureDaemon.app
+  ```
+
