@@ -33,6 +33,22 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 
 ---
 
+## 📸 Interface & Screenshots
+
+| Menu Bar & Telemetry | Gestures Configuration |
+|:---:|:---:|
+| <img src="screenshots/menu.png" width="420" alt="Menu Bar & Battery Telemetry" /><br><sub>**Status Menu**: Instant battery percentage, charging indicator, pause toggle & quick settings</sub> | <img src="screenshots/gestures.png" width="420" alt="Gestures Configuration" /><br><sub>**Gestures Tab**: Directional flick triggers, Spaces switching & HUD volume chording</sub> |
+
+| Side Buttons Customization | App-Specific Profiles |
+|:---:|:---:|
+| <img src="screenshots/side_buttons.png" width="420" alt="Side Buttons Customization" /><br><sub>**Side Buttons Tab**: Buttons 3 & 4 history navigation with interactive shortcut recorder</sub> | <img src="screenshots/app_profiles.png" width="420" alt="App Profiles" /><br><sub>**App Profiles Tab**: Context-aware gesture and button overrides for Safari, VS Code, etc.</sub> |
+
+| General Tuning & Sensitivity | Live Visual Calibration Canvas |
+|:---:|:---:|
+| <img src="screenshots/general.png" width="420" alt="General Settings & Tuning" /><br><sub>**General Tuning**: Sub-pixel sensitivity, deadzone, timing window & icon styles</sub> | <img src="screenshots/live_tester.png" width="420" alt="Live Calibration Tester Canvas" /><br><sub>**Live Tester Canvas**: Real-time cursor displacement vectors, threshold rings & live gesture detection</sub> |
+
+---
+
 ## ✨ Features
 
 - ⚡️ **True 0.0% Idle CPU**: Ephemeral event-tap lifecycle guarantees zero IPC wakeups and zero context switches during normal mouse and trackpad pointer motion.
