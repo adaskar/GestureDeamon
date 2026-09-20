@@ -260,7 +260,9 @@ public final class ScrollPoster {
         var pendingStopPhase: ScrollLifecyclePhase?
 
         os_unfair_lock_lock(&stateLock)
-        lastCallbackTime = CFAbsoluteTimeGetCurrent()
+        // Single time query per frame — covers lastCallbackTime and all threshold comparisons.
+        let now = CFAbsoluteTimeGetCurrent()
+        lastCallbackTime = now
 
         // Calculate smooth interpolation
         let frame = (
@@ -276,7 +278,6 @@ public final class ScrollPoster {
         let filledValue = filter.fill(with: frame)
         let shiftedValue = shift(with: filledValue)
 
-        let now = CFAbsoluteTimeGetCurrent()
         if !manualInputEnded && lastManualEventTime > 0.0 && now - lastManualEventTime > manualContinuationThreshold {
             let endPlan = ScrollPhaseTracker.shared.onManualInputEnded()
             if !(endPlan.queue.isEmpty && endPlan.target == nil) {

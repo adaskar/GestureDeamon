@@ -19,12 +19,14 @@ public final class ScrollFilter {
         x0 = x1
         x1 = x1 + 0.23 * diffX
 
-        return (y: y0, x: x0)
+        // Return y1/x1 (current smoothed value) — not y0/x0 (previous frame),
+        // which would add one display-refresh of unnecessary output lag.
+        return (y: y1, x: x1)
     }
 
     @inline(__always)
     public func value() -> (y: Double, x: Double) {
-        return (y: y0, x: x0)
+        return (y: y1, x: x1)
     }
 
     public func reset() {

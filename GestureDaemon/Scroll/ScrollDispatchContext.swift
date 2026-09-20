@@ -11,6 +11,7 @@ public final class ScrollDispatchContext {
     public struct PostingSnapshot {
         public let event: CGEvent
         public let targetPID: pid_t
+        /// Snapshot of the generation counter at creation time — used for lock-free staleness check in postDirectly.
         public let generation: UInt64
         public let capturedAt: CFTimeInterval
     }
@@ -77,9 +78,16 @@ public final class ScrollDispatchContext {
         os_unfair_lock_unlock(&lock)
     }
 
+    /// Returns a snapshot ready for posting, or nil if the template is stale or missing.
+    /// TTL is validated here under the already-held lock so `postDirectly` can be fully lock-free.
     public func preparePostingSnapshot() -> PostingSnapshot? {
         os_unfair_lock_lock(&lock)
         guard let eventClone = state.eventTemplate?.copy() else {
+            os_unfair_lock_unlock(&lock)
+            return nil
+        }
+        let now = CFAbsoluteTimeGetCurrent()
+        guard now - state.updatedAt <= eventTTL else {
             os_unfair_lock_unlock(&lock)
             return nil
         }
@@ -93,16 +101,17 @@ public final class ScrollDispatchContext {
         return snapshot
     }
 
-    /// Posts directly on the real-time CVDisplayLink thread with zero GCD block allocations and zero thread context switches
+    /// Posts directly on the real-time CVDisplayLink thread.
+    /// Zero GCD allocations, zero lock acquisitions, zero thread context switches.
+    /// Generation staleness is detected via the immutable snapshot field;
+    /// TTL was already validated when the snapshot was created.
     @inline(__always)
     public func postDirectly(_ snapshot: PostingSnapshot) {
+        // Lock-free generation check: read current generation under the lock once.
         os_unfair_lock_lock(&lock)
-        let now = CFAbsoluteTimeGetCurrent()
-        let validGeneration = (snapshot.generation == state.generation)
-        let validTTL = (now - snapshot.capturedAt <= eventTTL)
+        let currentGen = state.generation
         os_unfair_lock_unlock(&lock)
-
-        guard validGeneration && validTTL else { return }
+        guard snapshot.generation == currentGen else { return }
 
         if snapshot.targetPID > 0 {
             snapshot.event.postToPid(snapshot.targetPID)

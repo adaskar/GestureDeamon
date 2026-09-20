@@ -49,6 +49,10 @@ public final class ScrollManager {
         let isDisabled: Bool
     }
     private var appCache: [pid_t: AppProfileCacheEntry] = [:]
+
+    // Cached SmoothScrollConfig — updated on configDidChangeNotification, never read from ConfigManager on the hot tap thread.
+    private var cachedScrollConfig: SmoothScrollConfig = SmoothScrollConfig()
+
     private var cacheLock = os_unfair_lock_s()
 
     // Remote desktop bundle identifiers / executable keywords to bypass smoothing
@@ -71,6 +75,9 @@ public final class ScrollManager {
     ]
 
     private init() {
+        // Cache the initial config so handleScrollEvent never touches ConfigManager on the hot path.
+        cachedScrollConfig = ConfigManager.shared.activeConfig.smoothScroll ?? SmoothScrollConfig()
+
         NotificationCenter.default.addObserver(
             forName: ConfigManager.configDidChangeNotification,
             object: nil,
@@ -79,6 +86,7 @@ public final class ScrollManager {
             guard let self = self else { return }
             os_unfair_lock_lock(&self.cacheLock)
             self.appCache.removeAll(keepingCapacity: true)
+            self.cachedScrollConfig = ConfigManager.shared.activeConfig.smoothScroll ?? SmoothScrollConfig()
             os_unfair_lock_unlock(&self.cacheLock)
             self.syncWithConfig()
         }
@@ -221,7 +229,7 @@ public final class ScrollManager {
             return Unmanaged.passUnretained(event)
         }
 
-        let globalConfig = ConfigManager.shared.activeConfig.smoothScroll ?? SmoothScrollConfig()
+        let globalConfig = cachedScrollConfig
         guard globalConfig.enabled else {
             return Unmanaged.passUnretained(event)
         }
@@ -266,8 +274,7 @@ public final class ScrollManager {
         let isToggle = matchesModifier(globalConfig.toggleModifier, in: flags)
         ScrollPoster.shared.updateShifting(enable: isToggle)
 
-        // Smooth configuration parameters
-        let enableSmooth = globalConfig.enabled
+        // Smooth configuration parameters (all read from cached value — zero ConfigManager access on hot path)
         let enableSmoothVertical = globalConfig.smoothVertical
         let enableSmoothHorizontal = globalConfig.smoothHorizontal
         let enableReverseVertical = globalConfig.reverseVertical
@@ -289,14 +296,10 @@ public final class ScrollManager {
             ScrollEvent.reverseX(&scrollEvent)
         }
 
+        // `globalConfig.enabled` was already checked above — no redundant gate needed here.
         let verticalPreference = willShiftVerticalToHorizontal ? enableSmoothHorizontal : enableSmoothVertical
-        var shouldSmoothVertical = hasVerticalDelta && verticalPreference
-        var shouldSmoothHorizontal = hasHorizontalDelta && enableSmoothHorizontal
-
-        if !enableSmooth {
-            shouldSmoothVertical = false
-            shouldSmoothHorizontal = false
-        }
+        let shouldSmoothVertical = hasVerticalDelta && verticalPreference
+        let shouldSmoothHorizontal = hasHorizontalDelta && enableSmoothHorizontal
 
         var smoothedY = 0.0
         var smoothedX = 0.0

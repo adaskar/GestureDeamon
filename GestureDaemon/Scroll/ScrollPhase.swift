@@ -29,6 +29,12 @@ public let ScrollPhaseValueMapping: [ScrollLifecyclePhase: [PhaseDimension: Doub
     .leave: [.scroll: 8.0, .momentum: 0.0]
 ]
 
+/// Tracks the macOS trackpad-phase lifecycle (scroll begin / ongoing / momentum / end).
+///
+/// **Thread safety**: `ScrollPhaseTracker` has no internal lock. All mutations (`apply`, `didDeliverFrame`,
+/// `reset`, and all `on*` query methods) MUST be called while holding `ScrollPoster.stateLock`.
+/// This is intentional: the poster is the sole owner of phase transitions, so adding a second lock
+/// would introduce redundant contention with no benefit.
 public final class ScrollPhaseTracker {
     public static let shared = ScrollPhaseTracker()
 
