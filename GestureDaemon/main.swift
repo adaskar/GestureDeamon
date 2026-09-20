@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.info("Accessibility granted. Starting event taps and hardware drivers...")
             EventTapManager.shared.start()
             HIDPlusPlusManager.shared.start()
+            ScrollManager.shared.start()
             SleepWakeManager.shared.start()
         }
 
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.info("SIGTERM received. Terminating application.")
             EventTapManager.shared.stop()
             HIDPlusPlusManager.shared.stop()
+            ScrollManager.shared.stop()
             NSApplication.shared.terminate(nil)
         }
         sigtermSource.resume()
@@ -50,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.info("GestureDaemon terminating...")
         EventTapManager.shared.stop()
         HIDPlusPlusManager.shared.stop()
+        ScrollManager.shared.stop()
     }
 }
 
@@ -92,6 +95,7 @@ if isDiagnostics {
         Log.info("Starting EventTap and HID++ Manager...")
         EventTapManager.shared.start()
         HIDPlusPlusManager.shared.start()
+        ScrollManager.shared.start()
         SleepWakeManager.shared.start()
     }
 
@@ -101,6 +105,7 @@ if isDiagnostics {
         Log.info("SIGTERM received. Shutting down.")
         EventTapManager.shared.stop()
         HIDPlusPlusManager.shared.stop()
+        ScrollManager.shared.stop()
         exit(0)
     }
     sigtermSource.resume()

@@ -252,6 +252,15 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         toggleItem.target = self
         menu.addItem(toggleItem)
 
+        // Smooth Scrolling Toggle
+        let isSmoothEnabled = ConfigManager.shared.activeConfig.smoothScroll?.enabled ?? true
+        let smoothTitle = isSmoothEnabled ? "Smooth Scrolling: Enabled" : "Smooth Scrolling: Disabled"
+        let smoothItem = NSMenuItem(title: smoothTitle, action: #selector(toggleSmoothScrolling), keyEquivalent: "")
+        smoothItem.image = NSImage(systemSymbolName: "computermouse.fill", accessibilityDescription: nil)
+        smoothItem.state = isSmoothEnabled ? .on : .off
+        smoothItem.target = self
+        menu.addItem(smoothItem)
+
         // Launch at Login
         let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         loginItem.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil)
@@ -337,6 +346,19 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             HIDPlusPlusManager.shared.handleWake()
         }
         Log.info(isPaused ? "Gestures paused from menu bar." : "Gestures resumed from menu bar.")
+    }
+
+    @objc private func toggleSmoothScrolling() {
+        var current = ConfigManager.shared.activeConfig
+        var smooth = current.smoothScroll ?? SmoothScrollConfig()
+        smooth.enabled.toggle()
+        current.smoothScroll = smooth
+        do {
+            try ConfigManager.shared.saveConfiguration(current)
+            Log.info("Smooth scrolling toggled: \(smooth.enabled)")
+        } catch {
+            Log.error("Failed to save configuration after toggling smooth scrolling: \(error)")
+        }
     }
 
     @objc private func toggleLaunchAtLogin() {

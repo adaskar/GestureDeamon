@@ -156,6 +156,9 @@ public struct AppProfilesPreferencesView: View {
                 .background(Color.yellow.opacity(0.08))
                 .cornerRadius(8)
 
+                // Smooth Scrolling App Override
+                smoothScrollOverrideCard(bundleId: bundleId)
+
                 // Slots Overrides
                 VStack(spacing: 12) {
                     slotOverrideCard(slot: .click, title: "Thumb Click", bundleId: bundleId)
@@ -242,6 +245,62 @@ public struct AppProfilesPreferencesView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+    }
+
+    private func smoothScrollOverrideCard(bundleId: String) -> some View {
+        let override = viewModel.config.applications?[bundleId]?.smoothScrollEnabled
+        let modeBinding = Binding<String>(
+            get: {
+                if let ov = override {
+                    return ov ? "enabled" : "disabled"
+                }
+                return "inherit"
+            },
+            set: { newMode in
+                guard var apps = viewModel.config.applications, var profile = apps[bundleId] else { return }
+                switch newMode {
+                case "enabled": profile.smoothScrollEnabled = true
+                case "disabled": profile.smoothScrollEnabled = false
+                default: profile.smoothScrollEnabled = nil
+                }
+                apps[bundleId] = profile
+                viewModel.config.applications = apps
+            }
+        )
+
+        return HStack(spacing: 12) {
+            Image(systemName: "computermouse.fill")
+                .font(.title2)
+                .foregroundColor(.accentColor)
+                .frame(width: 32, height: 32)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Smooth Scrolling Override")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("Enable or disable smooth scrolling specifically for this application.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Picker("", selection: modeBinding) {
+                Text("Inherit Global").tag("inherit")
+                Text("Force Enabled").tag("enabled")
+                Text("Force Disabled").tag("disabled")
+            }
+            .frame(width: 140)
+        }
+        .padding(12)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+        )
     }
 
     // MARK: - Actions

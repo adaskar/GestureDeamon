@@ -74,6 +74,24 @@
         <key>Comment</key><string>Volume Down</string>
     </dict>
 
+    <!-- Smooth Scrolling Configuration -->
+    <key>SmoothScroll</key>
+    <dict>
+        <key>Enabled</key><true/>
+        <key>ReverseVertical</key><false/>
+        <key>ReverseHorizontal</key><false/>
+        <key>SmoothVertical</key><true/>
+        <key>SmoothHorizontal</key><true/>
+        <key>SimulateTrackpad</key><true/>
+        <key>Speed</key><real>2.70</real>
+        <key>Step</key><real>33.6</real>
+        <key>Duration</key><real>4.35</real>
+        <key>DeadZone</key><real>1.0</real>
+        <key>DashModifier</key><string>Option</string>
+        <key>ToggleModifier</key><string>Shift</string>
+        <key>BlockModifier</key><string>Command</string>
+    </dict>
+
     <!-- Per-Application Contextual Profiles (override any gestures per app) -->
     <key>Applications</key>
     <dict>
