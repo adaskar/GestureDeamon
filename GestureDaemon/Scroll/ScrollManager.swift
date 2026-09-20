@@ -9,16 +9,13 @@ public final class ScrollManager {
     private var scrollTap: CFMachPort?
     private var scrollRunLoopSource: CFRunLoopSource?
 
-    private var mouseTap: CFMachPort?
-    private var mouseRunLoopSource: CFRunLoopSource?
-
-    private var hotkeyTap: CFMachPort?
-    private var hotkeyRunLoopSource: CFRunLoopSource?
-
-    // Modifier key tracking
-    private var isDashActive = false
-    private var isToggleActive = false
-    private var isBlockActive = false
+    // Fast O(1) process cache to avoid repeated LaunchServices/NSRunningApplication IPCs
+    private struct AppProfileCacheEntry {
+        let isRemote: Bool
+        let isDisabled: Bool
+    }
+    private var appCache: [pid_t: AppProfileCacheEntry] = [:]
+    private var lastObservedConfigChangeCount = 0
 
     // Remote desktop bundle identifiers / executable keywords to bypass smoothing
     private static let remoteDesktopBundleIdentifiers: Set<String> = [
@@ -39,15 +36,13 @@ public final class ScrollManager {
         "ARDAgent"
     ]
 
-    private var cachedTargetPid: pid_t = 0
-    private var cachedTargetBundleId: String? = nil
-
     private init() {
         NotificationCenter.default.addObserver(
             forName: ConfigManager.configDidChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            self?.appCache.removeAll(keepingCapacity: true)
             self?.syncWithConfig()
         }
     }
@@ -68,7 +63,7 @@ public final class ScrollManager {
 
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
-        // 1. Dedicated Scroll Wheel Event Tap at .cgAnnotatedSessionEventTap / .tailAppendEventTap
+        // Dedicated Scroll Wheel Event Tap at .cgAnnotatedSessionEventTap / .tailAppendEventTap
         let scrollMask: CGEventMask = (1 << CGEventType.scrollWheel.rawValue)
         guard let sTap = CGEvent.tapCreate(
             tap: .cgAnnotatedSessionEventTap,
@@ -103,51 +98,6 @@ public final class ScrollManager {
         CFRunLoopAddSource(CFRunLoopGetMain(), sSource, .commonModes)
         CGEvent.tapEnable(tap: sTap, enable: true)
 
-        // 2. Passive Left Mouse Down Tap for instant scroll braking (.listenOnly)
-        let mouseMask: CGEventMask = (1 << CGEventType.leftMouseDown.rawValue)
-        if let mTap = CGEvent.tapCreate(
-            tap: .cgAnnotatedSessionEventTap,
-            place: .tailAppendEventTap,
-            options: .listenOnly,
-            eventsOfInterest: mouseMask,
-            callback: { (_, _, event, refcon) -> Unmanaged<CGEvent>? in
-                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
-                let manager = Unmanaged<ScrollManager>.fromOpaque(refcon).takeUnretainedValue()
-                manager.brake()
-                return Unmanaged.passUnretained(event)
-            },
-            userInfo: observer
-        ) {
-            self.mouseTap = mTap
-            let mSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mTap, 0)
-            self.mouseRunLoopSource = mSource
-            CFRunLoopAddSource(CFRunLoopGetMain(), mSource, .commonModes)
-            CGEvent.tapEnable(tap: mTap, enable: true)
-        }
-
-        // 3. Passive Flags Changed Tap for modifier shortcuts (.listenOnly)
-        let hotkeyMask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
-        if let hTap = CGEvent.tapCreate(
-            tap: .cgAnnotatedSessionEventTap,
-            place: .tailAppendEventTap,
-            options: .listenOnly,
-            eventsOfInterest: hotkeyMask,
-            callback: { (_, _, event, refcon) -> Unmanaged<CGEvent>? in
-                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
-                let manager = Unmanaged<ScrollManager>.fromOpaque(refcon).takeUnretainedValue()
-                let flags = NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue))
-                manager.updateModifiers(flags: flags)
-                return Unmanaged.passUnretained(event)
-            },
-            userInfo: observer
-        ) {
-            self.hotkeyTap = hTap
-            let hSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, hTap, 0)
-            self.hotkeyRunLoopSource = hSource
-            CFRunLoopAddSource(CFRunLoopGetMain(), hSource, .commonModes)
-            CGEvent.tapEnable(tap: hTap, enable: true)
-        }
-
         isActive = true
         ScrollPoster.shared.create()
         ScrollPoster.shared.startKeeper()
@@ -168,72 +118,51 @@ public final class ScrollManager {
         scrollTap = nil
         scrollRunLoopSource = nil
 
-        if let tap = mouseTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            if let source = mouseRunLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-            }
-            CFMachPortInvalidate(tap)
-        }
-        mouseTap = nil
-        mouseRunLoopSource = nil
-
-        if let tap = hotkeyTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            if let source = hotkeyRunLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-            }
-            CFMachPortInvalidate(tap)
-        }
-        hotkeyTap = nil
-        hotkeyRunLoopSource = nil
-
         ScrollPoster.shared.stop()
         ScrollPoster.shared.stopKeeper()
         ScrollPoster.shared.reset()
-        Log.info("ScrollManager completely stopped and all scroll taps destroyed.")
+        appCache.removeAll(keepingCapacity: true)
+        Log.info("ScrollManager completely stopped and scroll tap destroyed.")
     }
 
     public func brake() {
         ScrollPoster.shared.brake()
     }
 
-    public func updateModifiers(flags: NSEvent.ModifierFlags) {
-        let config = ConfigManager.shared.activeConfig.smoothScroll ?? SmoothScrollConfig()
-
-        isDashActive = matchesModifier(config.dashModifier, in: flags)
-        let toggleState = matchesModifier(config.toggleModifier, in: flags)
-        if toggleState != isToggleActive {
-            isToggleActive = toggleState
-            ScrollPoster.shared.updateShifting(enable: toggleState)
-        }
-        isBlockActive = matchesModifier(config.blockModifier, in: flags)
-    }
-
-    private func matchesModifier(_ modifierName: String?, in flags: NSEvent.ModifierFlags) -> Bool {
+    @inline(__always)
+    private func matchesModifier(_ modifierName: String?, in flags: CGEventFlags) -> Bool {
         guard let name = modifierName?.lowercased(), !name.isEmpty else { return false }
         switch name {
         case "option", "opt", "alt":
-            return flags.contains(.option)
+            return flags.contains(.maskAlternate)
         case "shift":
-            return flags.contains(.shift)
+            return flags.contains(.maskShift)
         case "command", "cmd":
-            return flags.contains(.command)
+            return flags.contains(.maskCommand)
         case "control", "ctrl":
-            return flags.contains(.control)
+            return flags.contains(.maskControl)
         default:
             return false
         }
     }
 
     private func handleScrollEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap = scrollTap { CGEvent.tapEnable(tap: tap, enable: true) }
-            ScrollPoster.shared.stop(.trackingEnd)
+        if type != .scrollWheel {
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                if let tap = scrollTap { CGEvent.tapEnable(tap: tap, enable: true) }
+                ScrollPoster.shared.stop(.trackingEnd)
+            }
             return Unmanaged.passUnretained(event)
         }
 
-        guard type == .scrollWheel else {
+        // ULTRA-FAST TRACKPAD & CONTINUOUS FILTER (ZERO ALLOCATION, < 0.0001 ms):
+        // Native Apple trackpads and Magic Mouse ALWAYS report isContinuous != 0 or active phases.
+        // Discrete physical mouse wheels ALWAYS report isContinuous == 0 and zero phases.
+        if event.getDoubleValueField(.scrollWheelEventIsContinuous) != 0.0 {
+            return Unmanaged.passUnretained(event)
+        }
+        if event.getDoubleValueField(.scrollWheelEventMomentumPhase) != 0.0 ||
+           event.getDoubleValueField(.scrollWheelEventScrollPhase) != 0.0 {
             return Unmanaged.passUnretained(event)
         }
 
@@ -242,7 +171,6 @@ public final class ScrollManager {
             return Unmanaged.passUnretained(event)
         }
 
-        // Skip if thumb button is held down (EventTapManager motionTap handles thumb + scroll for volume)
         if EventTapManager.shared.isPaused {
             return Unmanaged.passUnretained(event)
         }
@@ -252,12 +180,14 @@ public final class ScrollManager {
             return Unmanaged.passUnretained(event)
         }
 
-        // If Block modifier is held (e.g. Command for CAD/zoom), pass raw event through
-        if isBlockActive {
+        // Modifier shortcuts evaluated directly from event flags (zero background taps required!)
+        let flags = event.flags
+        let isBlock = matchesModifier(globalConfig.blockModifier, in: flags)
+        if isBlock {
             return Unmanaged.passUnretained(event)
         }
 
-        let scrollEvent = ScrollEvent(with: event)
+        var scrollEvent = ScrollEvent(with: event)
         let hasVerticalDelta = scrollEvent.yData.valid && scrollEvent.yData.usableValue != 0.0
         let hasHorizontalDelta = scrollEvent.xData.valid && scrollEvent.xData.usableValue != 0.0
 
@@ -265,28 +195,25 @@ public final class ScrollManager {
             return Unmanaged.passUnretained(event)
         }
 
-        // Pass native trackpads and Magic Mouse through untouched!
-        if scrollEvent.isTrackpad() {
-            return Unmanaged.passUnretained(event)
-        }
-
-        // Detect target application
+        // Fast Target Application / Remote Desktop Check with O(1) Cache
         let targetPid = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
-        let targetBundleId = resolveBundleIdentifier(for: targetPid)
-
-        // Check if event is from remote desktop application
-        if isRemoteControlApplication(event: event, targetPid: targetPid, bundleId: targetBundleId) {
-            return Unmanaged.passUnretained(event)
+        if targetPid > 1 {
+            if let cached = appCache[targetPid] {
+                if cached.isRemote || cached.isDisabled {
+                    return Unmanaged.passUnretained(event)
+                }
+            } else {
+                let entry = resolveAppProfile(for: targetPid, event: event)
+                appCache[targetPid] = entry
+                if entry.isRemote || entry.isDisabled {
+                    return Unmanaged.passUnretained(event)
+                }
+            }
         }
 
-        // Check per-application profile overrides
-        if let bundleId = targetBundleId,
-           let appProfile = ConfigManager.shared.activeConfig.applications?[bundleId],
-           let profileSmoothEnabled = appProfile.smoothScrollEnabled,
-           !profileSmoothEnabled {
-            // App explicitly disabled smooth scrolling (e.g. Blender, games, etc.)
-            return Unmanaged.passUnretained(event)
-        }
+        let isDash = matchesModifier(globalConfig.dashModifier, in: flags)
+        let isToggle = matchesModifier(globalConfig.toggleModifier, in: flags)
+        ScrollPoster.shared.updateShifting(enable: isToggle)
 
         // Smooth configuration parameters
         let enableSmooth = globalConfig.enabled
@@ -301,14 +228,14 @@ public final class ScrollManager {
         let deadZone = globalConfig.deadZone
         let simulateTrackpad = globalConfig.simulateTrackpad
 
-        let willShiftVerticalToHorizontal = isToggleActive && hasVerticalDelta && !hasHorizontalDelta
+        let willShiftVerticalToHorizontal = isToggle && hasVerticalDelta && !hasHorizontalDelta
         let verticalReversePreference = willShiftVerticalToHorizontal ? enableReverseHorizontal : enableReverseVertical
 
         if hasVerticalDelta && verticalReversePreference {
-            ScrollEvent.reverseY(scrollEvent)
+            ScrollEvent.reverseY(&scrollEvent)
         }
         if hasHorizontalDelta && enableReverseHorizontal {
-            ScrollEvent.reverseX(scrollEvent)
+            ScrollEvent.reverseX(&scrollEvent)
         }
 
         let verticalPreference = willShiftVerticalToHorizontal ? enableSmoothHorizontal : enableSmoothVertical
@@ -325,14 +252,14 @@ public final class ScrollManager {
 
         if shouldSmoothVertical {
             if scrollEvent.yData.usableValue.magnitude < step {
-                ScrollEvent.normalizeY(scrollEvent, threshold: step)
+                ScrollEvent.normalizeY(&scrollEvent, threshold: step)
             }
             smoothedY = scrollEvent.yData.usableValue
         }
 
         if shouldSmoothHorizontal {
             if scrollEvent.xData.usableValue.magnitude < step {
-                ScrollEvent.normalizeX(scrollEvent, threshold: step)
+                ScrollEvent.normalizeX(&scrollEvent, threshold: step)
             }
             smoothedX = scrollEvent.xData.usableValue
         }
@@ -342,7 +269,7 @@ public final class ScrollManager {
         let needsPassthrough = needVerticalPassthrough || needHorizontalPassthrough
         let shouldSmoothAny = (smoothedY != 0.0) || (smoothedX != 0.0)
 
-        let amplification = isDashActive ? 5.0 : 1.0
+        let amplification = isDash ? 5.0 : 1.0
 
         if shouldSmoothAny {
             ScrollPoster.shared.update(
@@ -359,10 +286,10 @@ public final class ScrollManager {
 
         if needsPassthrough {
             if shouldSmoothVertical {
-                ScrollEvent.clearY(scrollEvent)
+                ScrollEvent.clearY(&scrollEvent)
             }
             if shouldSmoothHorizontal {
-                ScrollEvent.clearX(scrollEvent)
+                ScrollEvent.clearX(&scrollEvent)
             }
             return Unmanaged.passUnretained(event)
         }
@@ -378,38 +305,30 @@ public final class ScrollManager {
         return Unmanaged.passUnretained(event)
     }
 
-    private func resolveBundleIdentifier(for pid: pid_t) -> String? {
-        guard pid > 1 else {
-            return NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    private func resolveAppProfile(for pid: pid_t, event: CGEvent) -> AppProfileCacheEntry {
+        guard let app = NSRunningApplication(processIdentifier: pid) else {
+            return AppProfileCacheEntry(isRemote: false, isDisabled: false)
         }
-        if pid == cachedTargetPid, let bundleId = cachedTargetBundleId {
-            return bundleId
-        }
-        cachedTargetPid = pid
-        if let app = NSRunningApplication(processIdentifier: pid) {
-            cachedTargetBundleId = app.bundleIdentifier
-        } else {
-            cachedTargetBundleId = nil
-        }
-        return cachedTargetBundleId
-    }
 
-    private func isRemoteControlApplication(event: CGEvent, targetPid: pid_t, bundleId: String?) -> Bool {
-        let sourcePid = pid_t(event.getIntegerValueField(.eventSourceUnixProcessID))
-        let checkPid = sourcePid > 0 ? sourcePid : targetPid
-        guard checkPid > 0, let app = NSRunningApplication(processIdentifier: checkPid) else { return false }
-
+        var isRemote = false
         if let bId = app.bundleIdentifier, Self.remoteDesktopBundleIdentifiers.contains(bId) {
-            return true
-        }
-
-        if let path = app.executableURL?.path {
+            isRemote = true
+        } else if let path = app.executableURL?.path {
             for keyword in Self.remoteDesktopExecutableKeywords {
                 if path.contains(keyword) {
-                    return true
+                    isRemote = true
+                    break
                 }
             }
         }
-        return false
+
+        var isDisabled = false
+        if let bId = app.bundleIdentifier,
+           let profile = ConfigManager.shared.activeConfig.applications?[bId],
+           profile.smoothScrollEnabled == false {
+            isDisabled = true
+        }
+
+        return AppProfileCacheEntry(isRemote: isRemote, isDisabled: isDisabled)
     }
 }

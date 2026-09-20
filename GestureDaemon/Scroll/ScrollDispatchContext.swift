@@ -24,15 +24,16 @@ public final class ScrollDispatchContext {
 
     private var state = SnapshotState()
     private var lock = os_unfair_lock_s()
-    private let postQueue = DispatchQueue(label: "com.guru.GestureDaemon.scrollposter.post", qos: .userInteractive)
     private let eventTTL: CFTimeInterval = 5.0
 
     public init() {}
 
+    @inline(__always)
     public static func markSyntheticSmoothEvent(_ event: CGEvent) {
         event.setIntegerValueField(.eventSourceUserData, value: syntheticSmoothEventMarker)
     }
 
+    @inline(__always)
     public static func isSyntheticSmoothEvent(_ event: CGEvent) -> Bool {
         return event.getIntegerValueField(.eventSourceUserData) == syntheticSmoothEventMarker
     }
@@ -92,24 +93,21 @@ public final class ScrollDispatchContext {
         return snapshot
     }
 
-    public func enqueue(_ snapshot: PostingSnapshot) {
-        postQueue.async { [self] in
-            os_unfair_lock_lock(&self.lock)
-            let now = CFAbsoluteTimeGetCurrent()
-            let validGeneration = (snapshot.generation == self.state.generation)
-            let validTTL = (now - snapshot.capturedAt <= self.eventTTL)
-            os_unfair_lock_unlock(&self.lock)
+    /// Posts directly on the real-time CVDisplayLink thread with zero GCD block allocations and zero thread context switches
+    @inline(__always)
+    public func postDirectly(_ snapshot: PostingSnapshot) {
+        os_unfair_lock_lock(&lock)
+        let now = CFAbsoluteTimeGetCurrent()
+        let validGeneration = (snapshot.generation == state.generation)
+        let validTTL = (now - snapshot.capturedAt <= eventTTL)
+        os_unfair_lock_unlock(&lock)
 
-            guard validGeneration && validTTL else { return }
+        guard validGeneration && validTTL else { return }
 
-            if snapshot.targetPID > 0 {
-                // Post directly to the destination process PID
-                snapshot.event.postToPid(snapshot.targetPID)
-            } else {
-                // Fallback to HID event tap if target PID is unassigned
-                snapshot.event.post(tap: .cghidEventTap)
-            }
+        if snapshot.targetPID > 0 {
+            snapshot.event.postToPid(snapshot.targetPID)
+        } else {
+            snapshot.event.post(tap: .cgSessionEventTap)
         }
     }
 }
-

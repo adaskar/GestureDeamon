@@ -1,31 +1,36 @@
 import Foundation
 
-/// Non-linear curve peak filter to eliminate initial wheel tick jitter and produce smooth acceleration
+/// High-performance stack-allocated curve peak filter to eliminate wheel tick jitter without heap allocations
 public final class ScrollFilter {
-    private var curveWindowY = [0.0, 0.0]
-    private var curveWindowX = [0.0, 0.0]
+    private var y0: Double = 0.0
+    private var y1: Double = 0.0
+    private var x0: Double = 0.0
+    private var x1: Double = 0.0
 
     public init() {}
 
+    @inline(__always)
     public func fill(with nextValue: (y: Double, x: Double)) -> (y: Double, x: Double) {
-        curveWindowY = polish(curveWindowY, with: nextValue.y)
-        curveWindowX = polish(curveWindowX, with: nextValue.x)
-        return value()
+        let diffY = nextValue.y - y1
+        y0 = y1
+        y1 = y1 + 0.23 * diffY
+
+        let diffX = nextValue.x - x1
+        x0 = x1
+        x1 = x1 + 0.23 * diffX
+
+        return (y: y0, x: x0)
     }
 
+    @inline(__always)
     public func value() -> (y: Double, x: Double) {
-        return (y: curveWindowY[0], x: curveWindowX[0])
+        return (y: y0, x: x0)
     }
 
     public func reset() {
-        curveWindowY = [0.0, 0.0]
-        curveWindowX = [0.0, 0.0]
-    }
-
-    private func polish(_ array: [Double], with nextValue: Double) -> [Double] {
-        let first = array[1]
-        let diff = nextValue - first
-        return [first, first + 0.23 * diff, first + 0.50 * diff, first + 0.77 * diff, nextValue]
+        y0 = 0.0
+        y1 = 0.0
+        x0 = 0.0
+        x1 = 0.0
     }
 }
-

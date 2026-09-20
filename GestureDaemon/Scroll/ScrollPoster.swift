@@ -407,7 +407,7 @@ public final class ScrollPoster {
         snapshot.event.setDoubleValueField(.scrollWheelEventIsContinuous, value: 1.0)
         ScrollDispatchContext.markSyntheticSmoothEvent(snapshot.event)
 
-        dispatchContext.enqueue(snapshot)
+        dispatchContext.postDirectly(snapshot)
         ScrollPhaseTracker.shared.didDeliverFrame()
         return true
     }

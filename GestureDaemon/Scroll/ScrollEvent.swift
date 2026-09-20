@@ -13,37 +13,43 @@ public struct AxisData {
     public var fixed: Bool = false
     public var valid: Bool = false
     public var usableValue: Double = 0.0
+
+    public init() {}
 }
 
-public final class ScrollEvent {
+public struct ScrollEvent {
     public let event: CGEvent
     public var yData: AxisData
     public var xData: AxisData
 
+    @inline(__always)
     public init(with cgEvent: CGEvent) {
         self.event = cgEvent
         self.yData = ScrollEvent.extractAxisData(event: cgEvent, axis: .y)
         self.xData = ScrollEvent.extractAxisData(event: cgEvent, axis: .x)
     }
 
-    // MARK: - Trackpad Discrimination
+    // MARK: - Trackpad Discrimination (Zero-allocation fast path)
+    @inline(__always)
     public static func isTrackpad(with event: CGEvent) -> Bool {
-        let isContinuous = event.getDoubleValueField(.scrollWheelEventIsContinuous)
-        let momentumPhase = event.getDoubleValueField(.scrollWheelEventMomentumPhase)
-        let scrollPhase = event.getDoubleValueField(.scrollWheelEventScrollPhase)
-
         // Native trackpads, Magic Mouse, and continuous momentum report isContinuous != 0 or active phases
-        if isContinuous != 0.0 || momentumPhase != 0.0 || scrollPhase != 0.0 {
+        if event.getDoubleValueField(.scrollWheelEventIsContinuous) != 0.0 {
+            return true
+        }
+        if event.getDoubleValueField(.scrollWheelEventMomentumPhase) != 0.0 ||
+           event.getDoubleValueField(.scrollWheelEventScrollPhase) != 0.0 {
             return true
         }
         return false
     }
 
+    @inline(__always)
     public func isTrackpad() -> Bool {
         return ScrollEvent.isTrackpad(with: event)
     }
 
     // MARK: - Axis Extraction & Manipulation
+    @inline(__always)
     public static func extractAxisData(event: CGEvent, axis: ScrollAxis) -> AxisData {
         var data = AxisData()
         if axis == .y {
@@ -72,31 +78,36 @@ public final class ScrollEvent {
         return data
     }
 
-    public static func reverseY(_ scrollEvent: ScrollEvent) {
+    @inline(__always)
+    public static func reverseY(_ scrollEvent: inout ScrollEvent) {
         scrollEvent.event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: -scrollEvent.yData.scrollFix)
         scrollEvent.event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: -scrollEvent.yData.scrollPt)
         scrollEvent.event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: -scrollEvent.yData.scrollFixPt)
         scrollEvent.yData.usableValue = -scrollEvent.yData.usableValue
     }
 
-    public static func reverseX(_ scrollEvent: ScrollEvent) {
+    @inline(__always)
+    public static func reverseX(_ scrollEvent: inout ScrollEvent) {
         scrollEvent.event.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: -scrollEvent.xData.scrollFix)
         scrollEvent.event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: -scrollEvent.xData.scrollPt)
         scrollEvent.event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: -scrollEvent.xData.scrollFixPt)
         scrollEvent.xData.usableValue = -scrollEvent.xData.usableValue
     }
 
-    public static func normalizeY(_ scrollEvent: ScrollEvent, threshold: Double) {
+    @inline(__always)
+    public static func normalizeY(_ scrollEvent: inout ScrollEvent, threshold: Double) {
         let val = scrollEvent.yData.usableValue
         scrollEvent.yData.usableValue = val > 0 ? max(val.magnitude, threshold) : -max(val.magnitude, threshold)
     }
 
-    public static func normalizeX(_ scrollEvent: ScrollEvent, threshold: Double) {
+    @inline(__always)
+    public static func normalizeX(_ scrollEvent: inout ScrollEvent, threshold: Double) {
         let val = scrollEvent.xData.usableValue
         scrollEvent.xData.usableValue = val > 0 ? max(val.magnitude, threshold) : -max(val.magnitude, threshold)
     }
 
-    public static func clearY(_ scrollEvent: ScrollEvent) {
+    @inline(__always)
+    public static func clearY(_ scrollEvent: inout ScrollEvent) {
         scrollEvent.event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: 0)
         scrollEvent.event.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: 0.0)
         scrollEvent.event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: 0.0)
@@ -106,7 +117,8 @@ public final class ScrollEvent {
         scrollEvent.yData.usableValue = 0.0
     }
 
-    public static func clearX(_ scrollEvent: ScrollEvent) {
+    @inline(__always)
+    public static func clearX(_ scrollEvent: inout ScrollEvent) {
         scrollEvent.event.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: 0)
         scrollEvent.event.setDoubleValueField(.scrollWheelEventPointDeltaAxis2, value: 0.0)
         scrollEvent.event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: 0.0)
@@ -116,4 +128,3 @@ public final class ScrollEvent {
         scrollEvent.xData.usableValue = 0.0
     }
 }
-
