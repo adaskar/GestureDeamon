@@ -1,15 +1,17 @@
 # GestureDaemon 🪟🖱️
 
+[![Version](https://img.shields.io/badge/version-0.1.0-informational?style=flat-square)](https://github.com/adaskar/GestureDeamon/releases/tag/v0.1.0)
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-black?style=flat-square&logo=apple)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange?style=flat-square&logo=swift)](https://developer.apple.com/swift/)
 [![Architecture](https://img.shields.io/badge/Architecture-Universal%20(Apple%20Silicon%20%2B%20Intel)-blue?style=flat-square)](https://developer.apple.com)
 [![Idle CPU](https://img.shields.io/badge/Idle%20CPU-0.0%25-brightgreen?style=flat-square)](https://github.com/adaskar/GestureDeamon)
+[![Smooth Scrolling](https://img.shields.io/badge/Smooth%20Scrolling-CVDisplayLink-blueviolet?style=flat-square)](https://github.com/adaskar/GestureDeamon)
 [![Dependencies](https://img.shields.io/badge/Dependencies-Zero-success?style=flat-square)](https://github.com/adaskar/GestureDeamon)
 [![License](https://img.shields.io/badge/License-MIT-purple?style=flat-square)](LICENSE)
 
 > **Ultra-lightweight, zero-telemetry native macOS background daemon and menu bar utility replacing Logitech Options+ for multi-button mice.**
 
-Built in 100% pure Swift with **zero external dependencies**. Consumes **0.0% idle CPU** and less than 15 MB of RAM while delivering instant, sub-millisecond Mission Control, App Exposé, Spaces navigation, thumb-scroll volume chording, and universal side-button history controls.
+Built in 100% pure Swift with **zero external dependencies**. Consumes **0.0% idle CPU** and less than 15 MB of RAM while delivering instant Mission Control, App Exposé, Spaces navigation, **trackpad-quality smooth scrolling**, thumb-scroll volume chording, and universal side-button history controls.
 
 ---
 
@@ -25,6 +27,7 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 | **Memory Footprint** | 300 MB – 800 MB+ | **< 15 MB** |
 | **Dependencies / Runtimes** | Node.js, Electron, Python, Crashpad | **Zero** (Pure Swift & Apple SPI) |
 | **Network Telemetry** | Active tracking & analytics | **100% Offline & Private** |
+| **Smooth Scrolling** | None (raw line-scroll ticks) | **CVDisplayLink + Trackpad Phase Simulation** |
 | **Preferences & Tuning** | Heavy cloud-synced web UI | **Native SwiftUI Settings (`⌘,`)** + Live Plist Hot-Reload |
 | **Calibration & Testing** | None | **Live Visual Calibration Tester Canvas** |
 | **Space Transitions** | Emulated keys (frequent escape codes) | Native WindowServer Symbolic HotKeys |
@@ -52,20 +55,21 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 ## ✨ Features
 
 - ⚡️ **True 0.0% Idle CPU**: Ephemeral event-tap lifecycle guarantees zero IPC wakeups and zero context switches during normal mouse and trackpad pointer motion.
+- 🖱 **Native Smooth Scrolling** *(New in v0.1.0)*: CVDisplayLink-based smooth scrolling engine transforms choppy discrete mouse-wheel ticks into fluid, momentum-aware inertia scrolling that is visually indistinguishable from a trackpad. Emits correctly sequenced macOS scroll phase values (`scrollWheelEventScrollPhase` / `scrollWheelEventMomentumPhase`) so apps with kinetic deceleration (Safari, Maps, PDFs, Xcode canvas) work naturally. Configurable speed, duration, dead-zone, and step normalization. Modifier shortcuts: `Option` for 5× dash scroll, `Shift` to redirect vertical to horizontal, `Command` to bypass. Automatic pass-through for remote desktop clients (TeamViewer, AnyDesk, Parsec, RustDesk, and more).
 - 🪟 **Fluid Spaces & Mission Control Transitions**: Uses reverse-engineered Apple CoreGraphics Services (CGS) SPI with `NX_SECONDARYFNMASK` modifier injection for flawless native Desktop switching.
 - 🎯 **Native Dock Integration**: Instant Mission Control and App Exposé via private `CoreDockSendNotification`.
 - 🔊 **Thumb Gesture + Scroll Wheel Chording**: Hold the thumb button and scroll the wheel to instantly adjust **System Volume Up/Down** with native macOS bezel HUD overlays. Swallows scroll events cleanly so pages never jitter.
-- 🎛 **Native SwiftUI Preferences (`⌘,`)**: Full graphical settings interface with 5 tabs: **Gestures**, **Side Buttons**, **App Profiles**, **General & Tuning**, and an interactive **Live Calibration Canvas**.
+- 🎛 **Native SwiftUI Preferences (`⌘,`)**: Full graphical settings interface with 6 tabs: **Gestures**, **Side Buttons**, **App Profiles**, **Smooth Scrolling**, **General & Tuning**, and an interactive **Live Calibration Canvas**.
 - 🧪 **Live Tester Canvas**: Real-time visual feedback showing mouse cursor displacement vectors, threshold & deadzone boundary rings, button press state badges, and live gesture recognition.
 - ⌨️ **Interactive Shortcut Recorder**: Effortlessly record custom shortcuts with automatic layout normalization across international keyboards (QWERTY, AZERTY, Turkish Q, Colemak, etc.).
-- 🔋 **Live Battery & Hardware Telemetry**: Native Logitech HID++ 2.0 query engine (`0x1000`/`0x1004`) reports mouse battery percentage and charging state directly in the macOS menu bar.
+- 🔋 **Live Battery & Hardware Telemetry**: Native Logitech HID++ 2.0 query engine (`0x1000`/`0x1004`) reports mouse battery percentage and charging state directly in the macOS menu bar. Battery info is preserved across sleep and refreshed automatically on wake.
 - 🧼 **Modifier Sanitization**: Unconditionally swallows Logitech's hardware fallback `Cmd+Option+Tab` thumb macro and flushes system modifiers—preventing VS Code or browser tab bars from stealing focus.
 - 🧭 **Universal Side Navigation (Back & Forward)**: Translates side buttons (Buttons 3 & 4) into instant history navigation (`Cmd+[` / `Cmd+]`) across Safari, Chrome, and Finder, with smart IDE navigation (`Ctrl+-` / `Ctrl+Shift+-`) in Visual Studio Code.
-- 📱 **Per-Application Contextual Profiles**: Dynamically override gestures and button bindings based on the active foreground application (e.g. scrub timelines in video editors, navigate history in browsers, toggle terminal in IDEs).
-- 🎛 **Live Hot-Reloading (`config.plist`)**: Edit your configuration in `~/.config/GestureDaemon/config.plist` and changes take effect immediately without restarting.
-- 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), customizable menu bar styles ("standard", "minimal", "percentage", "hidden"), and modern `SMAppService` launch-at-login integration.
+- 📱 **Per-Application Contextual Profiles**: Dynamically override gestures, button bindings, and smooth scrolling behaviour based on the active foreground application.
+- 🎛 **Live Hot-Reloading (`config.plist`)**: Edit your configuration in `~/.config/GestureDaemon/config.plist` and changes take effect immediately without restarting the daemon.
+- 🍏 **Modern macOS Agent**: Native `.app` bundle with `LSUIElement=true`, status bar controller (`NSStatusItem`), customizable menu bar styles ("standard", "battery", "batteryWithPercentage", "hidden"), and modern `SMAppService` launch-at-login integration.
 - 📡 **Dual-Transport HID++ (USB & Direct Bluetooth LE)**: Seamlessly detects and controls Logitech mice over USB Unifying/Bolt receivers (`0xFF00`) or direct **Bluetooth Low Energy** connections (`0xFF43:0x0202`), automatically diverting the thumb button with zero setup.
-- 🌙 **Sleep / Wake & Power Resilience**: Automatic self-healing power management (`SleepWakeManager`) that detects system sleep, screen lock, and display power-offs, automatically re-enables event taps, flushes stale Bluetooth handles, and re-diverts hardware buttons seamlessly upon wake.
+- 🌙 **Sleep / Wake & Power Resilience**: Automatic self-healing power management (`SleepWakeManager`) that detects system sleep, screen lock, and display power-offs, automatically re-enables event taps, flushes stale Bluetooth handles, re-diverts hardware buttons, and refreshes battery telemetry upon wake.
 - 🪵 **Built-in Diagnostic Logging**: Real-time event tracking and live logging at `~/.config/GestureDaemon/daemon.log` for easy troubleshooting.
 
 ---
@@ -189,11 +193,16 @@ Press **`⌘,`** or click **Preferences...** in the menu bar to open the native 
 
 - **Gestures Tab**: Configure actions for Click, Drag Left, Drag Right, Drag Up, Drag Down, Scroll Up, and Scroll Down.
 - **Side Buttons Tab**: Customize Back and Forward buttons with custom key shortcuts, application launches, or terminal commands.
-- **App Profiles Tab**: Set custom per-application overrides (e.g. tab cycling in Safari, timeline scrubbing in video editors, terminal toggling in VS Code).
+- **App Profiles Tab**: Set custom per-application overrides (e.g. tab cycling in Safari, timeline scrubbing in video editors, terminal toggling in VS Code). Smooth scrolling can be disabled per-app from this tab.
+- **Smooth Scrolling Tab** *(New in v0.1.0)*:
+  - Enable / disable smooth scrolling globally or toggle it from the menu bar.
+  - Speed multiplier, inertia duration slider, dead-zone threshold, and step normalization.
+  - Per-axis toggles (smooth vertical, smooth horizontal, reverse vertical, reverse horizontal).
+  - Trackpad phase simulation toggle (emits `scrollWheelEventScrollPhase` for apps with kinetic deceleration).
 - **General & Tuning Tab**:
   - Sensitivity sliders: Drag Threshold (points), Deadzone Radius (points), Gesture Timing Window (ms).
   - Launch at Login toggle (`SMAppService`).
-  - Menu Bar style selector: `Standard (Icon + Battery)`, `Minimal Icon`, `Percentage Only`, or `Hidden`.
+  - Menu Bar style selector: `Standard`, `Mouse + Battery Icon`, `Battery Icon + Percentage`, or `Hidden`.
   - Diagnostics and Log Level selection (`Debug`, `Info`, `Error`, `None`).
   - Real-time macOS Accessibility & Input Monitoring permission badges with one-click fix buttons.
 - **Live Tester Tab**:
