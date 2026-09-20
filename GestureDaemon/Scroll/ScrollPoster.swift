@@ -32,7 +32,6 @@ public final class ScrollPoster {
     private var stateLock = os_unfair_lock_s()
     private let dispatchContext = ScrollDispatchContext.shared
 
-    private var keeper: Timer?
     private var lastCallbackTime: CFTimeInterval = 0.0
     private var lastRecreateAttempt: CFTimeInterval = 0.0
     private let recreateCooldown: CFTimeInterval = 3.0
@@ -224,44 +223,11 @@ public final class ScrollPoster {
         guard now - lastRecreateAttempt >= recreateCooldown else { return false }
         lastRecreateAttempt = now
         create()
-        if let validPoster = poster {
-            let result = CVDisplayLinkStart(validPoster)
-            if result == kCVReturnSuccess {
-                os_unfair_lock_lock(&stateLock)
-                lastCallbackTime = CFAbsoluteTimeGetCurrent()
-                os_unfair_lock_unlock(&stateLock)
-            }
-        }
-        return true
+        return poster != nil
     }
 
-    public func startKeeper() {
-        keeper?.invalidate()
-        keeper = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.healthCheck()
-        }
-    }
-
-    public func stopKeeper() {
-        keeper?.invalidate()
-        keeper = nil
-    }
-
-    private func healthCheck() {
-        guard let validPoster = poster else {
-            recreateDisplayLink()
-            return
-        }
-        if CVDisplayLinkIsRunning(validPoster) {
-            os_unfair_lock_lock(&stateLock)
-            let lastTime = lastCallbackTime
-            os_unfair_lock_unlock(&stateLock)
-            if lastTime > 0 && CFAbsoluteTimeGetCurrent() - lastTime > 2.0 {
-                Log.info("ScrollPoster: zombie CVDisplayLink detected. Recreating...")
-                recreateDisplayLink()
-            }
-        }
-    }
+    public func startKeeper() {}
+    public func stopKeeper() {}
 
     // MARK: - Frame Processing & Output Pump
     private func perform(_ plan: ScrollPhaseTracker.TransitionPlan, emitTargetImmediately: Bool, delta: (y: Double, x: Double) = (0.0, 0.0)) {
@@ -360,14 +326,12 @@ public final class ScrollPoster {
             }
         }
 
-        if pendingStopPhase == nil && manualInputEnded && !momentumActive && residualMagnitude <= deadZone {
-            let pendingStop = trackingEndScheduledTime != nil && now >= trackingEndScheduledTime!
-            let outputSettled = outputMagnitude <= deadZone
-            if pendingStop && outputSettled {
+        if pendingStopPhase == nil && manualInputEnded && !momentumActive && residualMagnitude <= deadZone && outputMagnitude <= deadZone {
+            if trackingEndScheduledTime == nil || now >= trackingEndScheduledTime! {
                 trackingEndScheduledTime = nil
                 pendingStopPhase = .trackingEnd
             }
-        } else {
+        } else if !manualInputEnded || residualMagnitude > deadZone {
             trackingEndScheduledTime = nil
         }
 

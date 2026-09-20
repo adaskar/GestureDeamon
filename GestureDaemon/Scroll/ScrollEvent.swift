@@ -33,15 +33,12 @@ public struct ScrollEvent {
     @inline(__always)
     public static func isDiscreteMouseWheel(with event: CGEvent) -> Bool {
         // 1. Continuous, trackpad momentum, or touch phases are NEVER a discrete mouse wheel
-        if event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0 ||
-           event.getDoubleValueField(.scrollWheelEventIsContinuous) != 0.0 {
+        if event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0 {
             return false
         }
 
         if event.getIntegerValueField(.scrollWheelEventScrollPhase) != 0 ||
-           event.getDoubleValueField(.scrollWheelEventScrollPhase) != 0.0 ||
-           event.getIntegerValueField(.scrollWheelEventMomentumPhase) != 0 ||
-           event.getDoubleValueField(.scrollWheelEventMomentumPhase) != 0.0 {
+           event.getIntegerValueField(.scrollWheelEventMomentumPhase) != 0 {
             return false
         }
 
@@ -50,12 +47,6 @@ public struct ScrollEvent {
         let lineDeltaX = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
         if lineDeltaY == 0 && lineDeltaX == 0 {
             // Trackpad subpixel float delta without integer lines
-            return false
-        }
-
-        let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
-        let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
-        if pointDeltaY == 0.0 && pointDeltaX == 0.0 {
             return false
         }
 
