@@ -42,13 +42,17 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 |:---:|:---:|
 | <img src="screenshots/menu.png" width="420" alt="Menu Bar & Battery Telemetry" /><br><sub>**Status Menu**: Instant battery percentage, charging indicator, pause toggle & quick settings</sub> | <img src="screenshots/gestures.png" width="420" alt="Gestures Configuration" /><br><sub>**Gestures Tab**: Directional flick triggers, Spaces switching & HUD volume chording</sub> |
 
-| Side Buttons Customization | App-Specific Profiles |
+| Smooth Scrolling Configuration | Side Buttons Customization |
 |:---:|:---:|
-| <img src="screenshots/side_buttons.png" width="420" alt="Side Buttons Customization" /><br><sub>**Side Buttons Tab**: Buttons 3 & 4 history navigation with interactive shortcut recorder</sub> | <img src="screenshots/app_profiles.png" width="420" alt="App Profiles" /><br><sub>**App Profiles Tab**: Context-aware gesture and button overrides for Safari, VS Code, etc.</sub> |
+| <img src="screenshots/smooth_scroll.png" width="420" alt="Smooth Scrolling Configuration" /><br><sub>**Smooth Scrolling Tab**: Inertia duration, speed multiplier, deadzone & trackpad phase simulation</sub> | <img src="screenshots/side_buttons.png" width="420" alt="Side Buttons Customization" /><br><sub>**Side Buttons Tab**: Buttons 3 & 4 history navigation with interactive shortcut recorder</sub> |
 
-| General Tuning & Sensitivity | Live Visual Calibration Canvas |
+| App-Specific Profiles | General Tuning & Sensitivity |
 |:---:|:---:|
-| <img src="screenshots/general.png" width="420" alt="General Settings & Tuning" /><br><sub>**General Tuning**: Sub-pixel sensitivity, deadzone, timing window & icon styles</sub> | <img src="screenshots/live_tester.png" width="420" alt="Live Calibration Tester Canvas" /><br><sub>**Live Tester Canvas**: Real-time cursor displacement vectors, threshold rings & live gesture detection</sub> |
+| <img src="screenshots/app_profiles.png" width="420" alt="App Profiles" /><br><sub>**App Profiles Tab**: Context-aware gesture, button, and smooth scroll overrides per application</sub> | <img src="screenshots/general.png" width="420" alt="General Settings & Tuning" /><br><sub>**General Tuning**: Sub-pixel sensitivity, deadzone, timing window & icon styles</sub> |
+
+| Live Visual Calibration Canvas |
+|:---:|
+| <img src="screenshots/live_tester.png" width="560" alt="Live Calibration Tester Canvas" /><br><sub>**Live Tester Canvas**: Real-time cursor displacement vectors, threshold rings & live gesture detection</sub> |
 
 ---
 
