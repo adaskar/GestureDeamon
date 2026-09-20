@@ -29,41 +29,47 @@ public struct ScrollEvent {
         self.xData = ScrollEvent.extractAxisData(event: cgEvent, axis: .x)
     }
 
-    // MARK: - Trackpad Discrimination (Zero-allocation fast path)
+    // MARK: - Discrete Physical Mouse Wheel Verification (Zero-allocation fast path)
     @inline(__always)
-    public static func isTrackpad(with event: CGEvent) -> Bool {
-        // 1. Explicit continuous flag (both int and double representations)
+    public static func isDiscreteMouseWheel(with event: CGEvent) -> Bool {
+        // 1. Continuous, trackpad momentum, or touch phases are NEVER a discrete mouse wheel
         if event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0 ||
            event.getDoubleValueField(.scrollWheelEventIsContinuous) != 0.0 {
-            return true
+            return false
         }
 
-        // 2. Momentum & Scroll phases (Apple trackpads and Magic Mouse use these lifecycle phases)
         if event.getIntegerValueField(.scrollWheelEventScrollPhase) != 0 ||
            event.getDoubleValueField(.scrollWheelEventScrollPhase) != 0.0 ||
            event.getIntegerValueField(.scrollWheelEventMomentumPhase) != 0 ||
            event.getDoubleValueField(.scrollWheelEventMomentumPhase) != 0.0 {
-            return true
+            return false
         }
 
-        // 3. Subpixel float movement with 0 fixed integer lines:
-        // Physical discrete mouse wheels ALWAYS report fixed lines (deltaAxis1 != 0, e.g. ±1 per notch).
-        // If an event has pointDelta (pixels) but 0 line delta, it is continuous trackpad input.
+        // 2. A discrete mouse wheel ALWAYS produces integer line delta (±1, ±2, etc.)
         let lineDeltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
         let lineDeltaX = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
-        let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
-        let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
-
-        if lineDeltaY == 0 && lineDeltaX == 0 && (pointDeltaY != 0.0 || pointDeltaX != 0.0) {
-            return true
+        if lineDeltaY == 0 && lineDeltaX == 0 {
+            // Trackpad subpixel float delta without integer lines
+            return false
         }
 
-        return false
+        let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+        let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
+        if pointDeltaY == 0.0 && pointDeltaX == 0.0 {
+            return false
+        }
+
+        return true
+    }
+
+    @inline(__always)
+    public static func isTrackpad(with event: CGEvent) -> Bool {
+        return !isDiscreteMouseWheel(with: event)
     }
 
     @inline(__always)
     public func isTrackpad() -> Bool {
-        return ScrollEvent.isTrackpad(with: event)
+        return !ScrollEvent.isDiscreteMouseWheel(with: event)
     }
 
     // MARK: - Axis Extraction & Manipulation

@@ -2,6 +2,38 @@ import Cocoa
 import CoreGraphics
 import os
 
+private final class ScrollTapThread: Thread {
+    private var runLoop: CFRunLoop?
+    private let readySemaphore = DispatchSemaphore(value: 0)
+
+    override init() {
+        super.init()
+        self.name = "com.guru.GestureDaemon.ScrollTapThread"
+        self.qualityOfService = .userInteractive
+    }
+
+    override func main() {
+        self.runLoop = CFRunLoopGetCurrent()
+        // Prevent CFRunLoopRun from exiting immediately when empty
+        let port = NSMachPort()
+        RunLoop.current.add(port, forMode: .default)
+        readySemaphore.signal()
+        CFRunLoopRun()
+    }
+
+    func waitForRunLoop() -> CFRunLoop {
+        if let rl = runLoop { return rl }
+        readySemaphore.wait()
+        return runLoop!
+    }
+
+    func stop() {
+        if let rl = runLoop {
+            CFRunLoopStop(rl)
+        }
+    }
+}
+
 public final class ScrollManager {
     public static let shared = ScrollManager()
 
@@ -9,6 +41,7 @@ public final class ScrollManager {
 
     private var scrollTap: CFMachPort?
     private var scrollRunLoopSource: CFRunLoopSource?
+    private var tapThread: ScrollTapThread?
 
     // Fast O(1) process cache to avoid repeated LaunchServices/NSRunningApplication IPCs
     private struct AppProfileCacheEntry {
@@ -65,6 +98,11 @@ public final class ScrollManager {
         let isEnabled = ConfigManager.shared.activeConfig.smoothScroll?.enabled ?? false
         guard isEnabled else { return }
 
+        let thread = ScrollTapThread()
+        thread.start()
+        let targetRunLoop = thread.waitForRunLoop()
+        self.tapThread = thread
+
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
         // Dedicated Scroll Wheel Event Tap at .cgAnnotatedSessionEventTap / .tailAppendEventTap
@@ -93,19 +131,22 @@ public final class ScrollManager {
             userInfo: observer
         ) else {
             Log.error("ScrollManager: Failed to create scrollEventTap.")
+            thread.stop()
+            self.tapThread = nil
             return
         }
 
         self.scrollTap = sTap
         let sSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, sTap, 0)
         self.scrollRunLoopSource = sSource
-        CFRunLoopAddSource(CFRunLoopGetMain(), sSource, .commonModes)
+        CFRunLoopAddSource(targetRunLoop, sSource, .commonModes)
+        CFRunLoopWakeUp(targetRunLoop)
         CGEvent.tapEnable(tap: sTap, enable: true)
 
         isActive = true
         ScrollPoster.shared.create()
         ScrollPoster.shared.startKeeper()
-        Log.info("ScrollManager started with dedicated .cgAnnotatedSessionEventTap.")
+        Log.info("ScrollManager started with dedicated background thread event tap.")
     }
 
     public func stop() {
@@ -114,13 +155,16 @@ public final class ScrollManager {
 
         if let tap = scrollTap {
             CGEvent.tapEnable(tap: tap, enable: false)
-            if let source = scrollRunLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            if let source = scrollRunLoopSource, let thread = tapThread {
+                let targetRunLoop = thread.waitForRunLoop()
+                CFRunLoopRemoveSource(targetRunLoop, source, .commonModes)
             }
             CFMachPortInvalidate(tap)
         }
         scrollTap = nil
         scrollRunLoopSource = nil
+        tapThread?.stop()
+        tapThread = nil
 
         ScrollPoster.shared.stop()
         ScrollPoster.shared.stopKeeper()
@@ -166,10 +210,10 @@ public final class ScrollManager {
             return Unmanaged.passUnretained(event)
         }
 
-        // 2. ULTRA-FAST TRACKPAD & CONTINUOUS FILTER (ZERO ALLOCATION, < 0.0001 ms):
-        // Native Apple trackpads and Magic Mouse report isContinuous != 0, active phases,
-        // or subpixel float movement without integer lines.
-        if ScrollEvent.isTrackpad(with: event) {
+        // 2. DISCRETE PHYSICAL MOUSE WHEEL ONLY:
+        // Ignore everything else (trackpads, Magic Mouse, continuous momentum, gesture liftoffs, subpixel touches).
+        // They pass through immediately to macOS native scrolling with 0 processing.
+        guard ScrollEvent.isDiscreteMouseWheel(with: event) else {
             return Unmanaged.passUnretained(event)
         }
 
