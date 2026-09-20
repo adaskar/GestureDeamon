@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- **🔋 Battery telemetry loss on display sleep & screen lock** — Fixed an issue where waking the Mac after the screen turned off (display sleep or lock screen, without system ACPI sleep) caused battery information to disappear. Differentiated display power state from system sleep, implemented a zero-teardown fast path (`handleDisplayWake`) that keeps live IOHID handles intact when the Mac never slept, debounced rapid wake/unlock events, and preserved battery telemetry across transient reconnects.
 - **🔋 Battery info missing after system wake** — Mouse battery percentage now remains visible immediately on wake (preserved from the last reading before sleep) and refreshes with a fresh HID++ reading as soon as the Bluetooth link is re-established. A one-shot safety retry at +5 s after wake catches edge cases where the BLE stack silently drops the initial battery request during link re-establishment.
 
 ### ⚡ Performance
