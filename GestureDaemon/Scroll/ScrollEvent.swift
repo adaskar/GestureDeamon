@@ -32,14 +32,32 @@ public struct ScrollEvent {
     // MARK: - Trackpad Discrimination (Zero-allocation fast path)
     @inline(__always)
     public static func isTrackpad(with event: CGEvent) -> Bool {
-        // Native trackpads, Magic Mouse, and continuous momentum report isContinuous != 0 or active phases
-        if event.getDoubleValueField(.scrollWheelEventIsContinuous) != 0.0 {
+        // 1. Explicit continuous flag (both int and double representations)
+        if event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0 ||
+           event.getDoubleValueField(.scrollWheelEventIsContinuous) != 0.0 {
             return true
         }
-        if event.getDoubleValueField(.scrollWheelEventMomentumPhase) != 0.0 ||
-           event.getDoubleValueField(.scrollWheelEventScrollPhase) != 0.0 {
+
+        // 2. Momentum & Scroll phases (Apple trackpads and Magic Mouse use these lifecycle phases)
+        if event.getIntegerValueField(.scrollWheelEventScrollPhase) != 0 ||
+           event.getDoubleValueField(.scrollWheelEventScrollPhase) != 0.0 ||
+           event.getIntegerValueField(.scrollWheelEventMomentumPhase) != 0 ||
+           event.getDoubleValueField(.scrollWheelEventMomentumPhase) != 0.0 {
             return true
         }
+
+        // 3. Subpixel float movement with 0 fixed integer lines:
+        // Physical discrete mouse wheels ALWAYS report fixed lines (deltaAxis1 != 0, e.g. ±1 per notch).
+        // If an event has pointDelta (pixels) but 0 line delta, it is continuous trackpad input.
+        let lineDeltaY = event.getIntegerValueField(.scrollWheelEventDeltaAxis1)
+        let lineDeltaX = event.getIntegerValueField(.scrollWheelEventDeltaAxis2)
+        let pointDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+        let pointDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
+
+        if lineDeltaY == 0 && lineDeltaX == 0 && (pointDeltaY != 0.0 || pointDeltaX != 0.0) {
+            return true
+        }
+
         return false
     }
 
