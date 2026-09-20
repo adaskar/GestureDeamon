@@ -7,6 +7,7 @@ public struct PreferencesView: View {
     public enum PreferencesTab: String, CaseIterable, Identifiable {
         case gestures = "Gestures"
         case sideButtons = "Side Buttons"
+        case smoothScroll = "Smooth Scroll"
         case appProfiles = "App Profiles"
         case general = "General & Tuning"
         case liveTester = "Live Tester"
@@ -17,6 +18,7 @@ public struct PreferencesView: View {
             switch self {
             case .gestures: return "hand.draw.fill"
             case .sideButtons: return "arrow.left.and.right.circle.fill"
+            case .smoothScroll: return "computermouse.fill"
             case .appProfiles: return "app.badge.fill"
             case .general: return "gearshape.fill"
             case .liveTester: return "gauge.with.needle.fill"
@@ -41,7 +43,7 @@ public struct PreferencesView: View {
                     }
                 }
                 .pickerStyle(SegmentedPickerStyle())
-                .frame(maxWidth: 580)
+                .frame(maxWidth: 700)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -56,6 +58,8 @@ public struct PreferencesView: View {
                     GesturesPreferencesView(viewModel: viewModel)
                 case .sideButtons:
                     SideButtonsPreferencesView(viewModel: viewModel)
+                case .smoothScroll:
+                    SmoothScrollPreferencesView(viewModel: viewModel)
                 case .appProfiles:
                     AppProfilesPreferencesView(viewModel: viewModel)
                 case .general:

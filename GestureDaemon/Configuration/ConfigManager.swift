@@ -72,6 +72,7 @@ public struct AppProfile: Codable, Equatable, Hashable {
     public var scrollDownAction: ActionDefinition?
     public var backButtonAction: ActionDefinition?
     public var forwardButtonAction: ActionDefinition?
+    public var smoothScrollEnabled: Bool?
 
     public init(
         clickAction: ActionDefinition? = nil,
@@ -82,7 +83,8 @@ public struct AppProfile: Codable, Equatable, Hashable {
         scrollUpAction: ActionDefinition? = nil,
         scrollDownAction: ActionDefinition? = nil,
         backButtonAction: ActionDefinition? = nil,
-        forwardButtonAction: ActionDefinition? = nil
+        forwardButtonAction: ActionDefinition? = nil,
+        smoothScrollEnabled: Bool? = nil
     ) {
         self.clickAction = clickAction
         self.dragLeftAction = dragLeftAction
@@ -93,6 +95,7 @@ public struct AppProfile: Codable, Equatable, Hashable {
         self.scrollDownAction = scrollDownAction
         self.backButtonAction = backButtonAction
         self.forwardButtonAction = forwardButtonAction
+        self.smoothScrollEnabled = smoothScrollEnabled
     }
 
     enum CodingKeys: String, CodingKey {
@@ -105,6 +108,7 @@ public struct AppProfile: Codable, Equatable, Hashable {
         case scrollDownAction = "ScrollDownAction"
         case backButtonAction = "BackButtonAction"
         case forwardButtonAction = "ForwardButtonAction"
+        case smoothScrollEnabled = "SmoothScrollEnabled"
     }
 
     public func action(for slot: ActionSlot) -> ActionDefinition? {
@@ -168,6 +172,9 @@ public struct AppConfig: Codable, Equatable {
     public var enableLogging: Bool?
     public var logLevel: String?
 
+    // Smooth Scrolling Configuration
+    public var smoothScroll: SmoothScrollConfig?
+
     // Per-Application Contextual Profiles
     public var applications: [String: AppProfile]?
 
@@ -196,6 +203,7 @@ public struct AppConfig: Codable, Equatable {
         sensorDpi: Int? = nil,
         enableLogging: Bool? = false,
         logLevel: String? = "Info",
+        smoothScroll: SmoothScrollConfig? = SmoothScrollConfig(),
         applications: [String: AppProfile]? = nil
     ) {
         self.triggerButtonIndex = triggerButtonIndex
@@ -222,6 +230,7 @@ public struct AppConfig: Codable, Equatable {
         self.sensorDpi = sensorDpi
         self.enableLogging = enableLogging
         self.logLevel = logLevel
+        self.smoothScroll = smoothScroll
         self.applications = applications
     }
 
@@ -250,6 +259,7 @@ public struct AppConfig: Codable, Equatable {
         case sensorDpi = "SensorDPI"
         case enableLogging = "EnableLogging"
         case logLevel = "LogLevel"
+        case smoothScroll = "SmoothScroll"
         case applications = "Applications"
     }
 
@@ -473,6 +483,7 @@ public final class ConfigManager {
             forwardButtonAction: nil,
             enableLogging: false,
             logLevel: "Info",
+            smoothScroll: SmoothScrollConfig(),
             applications: [
                 "com.microsoft.VSCode": AppProfile(
                     clickAction: nil,
