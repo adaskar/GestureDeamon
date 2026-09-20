@@ -333,6 +333,8 @@ public final class HIDPlusPlusManager {
     // MARK: - Sleep & Wake Recovery
     public func handleSleep() {
         Log.info("💤 System going to sleep. Resetting HID++ state...")
+        // Do NOT clear batteryInfo here — preserve the last known reading so the
+        // menu bar continues to show a valid percentage during the wake reconnection window.
         self.isGestureButtonPressed = false
     }
 
@@ -363,6 +365,17 @@ public final class HIDPlusPlusManager {
                 self.reapplyHardwareDiversion()
             }
         }
+
+        // 3. One-shot battery safety net at +5.0s.
+        // Fires only if batteryInfo is still nil after all staged retries — covers the case where
+        // the BLE stack silently drops the first HID++ battery request during link re-establishment.
+        // Zero ongoing overhead: this timer fires once and does nothing if data already arrived.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+            guard let self = self else { return }
+            guard self.batteryInfo == nil, self.isBatterySupported else { return }
+            Log.info("☀️ Wake stage 3 (+5.0s): Battery info still missing — retrying battery request...")
+            self.refreshBatteryStatus()
+        }
     }
 
     public func reapplyHardwareDiversion() {
@@ -392,6 +405,14 @@ public final class HIDPlusPlusManager {
             }
         }
         applyConfiguredHardwareSettings()
+
+        // If the battery feature index is already cached, request a fresh reading immediately.
+        // This avoids waiting for the IRoot discovery round-trip (which the BLE stack may silently
+        // drop after wake) before the battery percentage appears in the menu bar.
+        if isBatterySupported {
+            refreshBatteryStatus()
+            Log.info("☀️ Requested immediate battery refresh after hardware re-diversion.")
+        }
     }
 
     public func restartMatching() {
