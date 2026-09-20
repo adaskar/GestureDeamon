@@ -81,6 +81,7 @@ public final class HIDPlusPlusManager {
     private var activeDevice: IOHIDDevice?
     private var managedDevices: [IOHIDDevice: ManagedDevice] = [:]
     private var isStarted = false
+    private var pendingWakeTimers: [DispatchWorkItem] = []
 
     private var activeManagedDevice: ManagedDevice? {
         guard let dev = activeDevice else { return nil }
@@ -183,11 +184,10 @@ public final class HIDPlusPlusManager {
         self.activeDevice = nil
         self.hidManager = nil
         self.isStarted = false
-        self.connectedDeviceName = nil
-        self.connectedTransport = nil
+        // Preserve connectedDeviceName and batteryInfo across transient restarts
+        // so the menu bar icon and battery percentage never flash or disappear.
         self.isDeviceOpen = false
         self.reprogFeatureIndex = nil
-        self.batteryInfo = nil
         self.currentDpi = nil
         Log.info("HID++ Manager stopped.")
     }
@@ -216,10 +216,8 @@ public final class HIDPlusPlusManager {
         }
 
         self.activeDevice = nil
-        self.connectedDeviceName = nil
-        self.connectedTransport = nil
+        // Preserve connectedDeviceName and batteryInfo so UI remains stable during transient reconnects
         self.reprogFeatureIndex = nil
-        self.batteryInfo = nil
         self.currentDpi = nil
         self.isDeviceOpen = false
     }
@@ -332,21 +330,73 @@ public final class HIDPlusPlusManager {
 
     // MARK: - Sleep & Wake Recovery
     public func handleSleep() {
-        Log.info("💤 System going to sleep. Resetting HID++ state...")
-        // Do NOT clear batteryInfo here — preserve the last known reading so the
-        // menu bar continues to show a valid percentage during the wake reconnection window.
+        Log.info("💤 Resetting HID++ gesture state for sleep / display off...")
         self.isGestureButtonPressed = false
     }
 
+    /// Handles display wake (monitor turned on / session unlocked, while macOS remained awake).
+    /// If the HID++ connection is already healthy and open, we do NOT tear it down; we simply
+    /// refresh battery telemetry and ensure hardware diversion is active.
+    public func handleDisplayWake() {
+        Log.info("☀️ Screen woke from display sleep (system remained awake).")
+        self.isGestureButtonPressed = false
+
+        // 1. Fast Path: If we already have an active open device, refresh battery and settings directly.
+        if let dev = activeDevice, let managed = managedDevices[dev], managed.isOpen {
+            Log.info("⚡️ Device '\(managed.name)' is already connected and open. Refreshing battery...")
+            if isBatterySupported {
+                refreshBatteryStatus()
+            } else {
+                if managed.transport == .bluetoothLE {
+                    discoverBLEFeatures(dev)
+                } else {
+                    discoverUSBFeatures(dev, deviceIndex: managed.deviceIndex)
+                }
+            }
+            reapplyHardwareDiversion()
+            return
+        }
+
+        // 2. Recovery Path: Attempt to open any managed devices that were temporarily marked not open.
+        var reconnected = false
+        for (device, managed) in managedDevices where !managed.isOpen {
+            let res = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+            if res == kIOReturnSuccess {
+                managed.isOpen = true
+                reconnected = true
+                Log.info("⚡️ Successfully re-opened '\(managed.name)' on display wake.")
+            }
+        }
+
+        if reconnected {
+            updateActiveDevice()
+            reapplyHardwareDiversion()
+            return
+        }
+
+        // 3. Fallback: If no open devices could be found, perform matching restart.
+        if managedDevices.isEmpty || activeDevice == nil {
+            Log.info("☀️ No active device found on display wake. Checking HID Manager...")
+            restartMatching()
+        }
+    }
+
+    /// Handles system wake (Mac waking from full ACPI sleep).
     public func handleWake() {
         Log.info("☀️ System woke from sleep. Re-synchronizing HID++ hardware...")
         self.isGestureButtonPressed = false
+
+        // Cancel any pending wake stages from previous wake events
+        for timer in pendingWakeTimers {
+            timer.cancel()
+        }
+        pendingWakeTimers.removeAll()
 
         // 1. Immediately restart matching to flush any stale IOHID handles
         restartMatching()
 
         // 2. Staged retries at +1.5s and +3.0s to account for Bluetooth link re-establishment
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        let stage1 = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             Log.info("☀️ Wake stage 1 (+1.5s): Verifying HID++ device connection...")
             if self.managedDevices.isEmpty {
@@ -355,8 +405,10 @@ public final class HIDPlusPlusManager {
                 self.reapplyHardwareDiversion()
             }
         }
+        pendingWakeTimers.append(stage1)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: stage1)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+        let stage2 = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
             Log.info("☀️ Wake stage 2 (+3.0s): Confirming HID++ diversion...")
             if self.managedDevices.isEmpty {
@@ -365,17 +417,19 @@ public final class HIDPlusPlusManager {
                 self.reapplyHardwareDiversion()
             }
         }
+        pendingWakeTimers.append(stage2)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: stage2)
 
-        // 3. One-shot battery safety net at +5.0s.
-        // Fires only if batteryInfo is still nil after all staged retries — covers the case where
-        // the BLE stack silently drops the first HID++ battery request during link re-establishment.
-        // Zero ongoing overhead: this timer fires once and does nothing if data already arrived.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+        // 3. Battery telemetry refresh at +5.0s.
+        // Queries current battery status once link has stabilized.
+        let stage3 = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            guard self.batteryInfo == nil, self.isBatterySupported else { return }
-            Log.info("☀️ Wake stage 3 (+5.0s): Battery info still missing — retrying battery request...")
+            guard self.isBatterySupported else { return }
+            Log.info("☀️ Wake stage 3 (+5.0s): Refreshing battery telemetry...")
             self.refreshBatteryStatus()
         }
+        pendingWakeTimers.append(stage3)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: stage3)
     }
 
     public func reapplyHardwareDiversion() {
@@ -386,7 +440,16 @@ public final class HIDPlusPlusManager {
             return
         }
 
-        for (device, managed) in managedDevices where managed.isOpen {
+        for (device, managed) in managedDevices {
+            if !managed.isOpen {
+                let res = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+                if res == kIOReturnSuccess {
+                    managed.isOpen = true
+                    Log.info("Successfully re-opened device '\(managed.name)' during re-diversion.")
+                }
+            }
+            guard managed.isOpen else { continue }
+
             switch managed.transport {
             case .bluetoothLE:
                 discoverBLEFeatures(device)
@@ -404,6 +467,7 @@ public final class HIDPlusPlusManager {
                 }
             }
         }
+        updateActiveDevice()
         applyConfiguredHardwareSettings()
 
         // If the battery feature index is already cached, request a fresh reading immediately.
