@@ -20,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.info("Accessibility granted. Starting event taps and hardware drivers...")
             EventTapManager.shared.start()
             HIDPlusPlusManager.shared.start()
-            ScrollManager.shared.start()
+            ScrollManager.shared.syncWithConfig()
             SleepWakeManager.shared.start()
         }
 
@@ -95,7 +95,7 @@ if isDiagnostics {
         Log.info("Starting EventTap and HID++ Manager...")
         EventTapManager.shared.start()
         HIDPlusPlusManager.shared.start()
-        ScrollManager.shared.start()
+        ScrollManager.shared.syncWithConfig()
         SleepWakeManager.shared.start()
     }
 

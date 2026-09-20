@@ -6,6 +6,15 @@ public final class ScrollManager {
 
     public private(set) var isActive = false
 
+    private var scrollTap: CFMachPort?
+    private var scrollRunLoopSource: CFRunLoopSource?
+
+    private var mouseTap: CFMachPort?
+    private var mouseRunLoopSource: CFRunLoopSource?
+
+    private var hotkeyTap: CFMachPort?
+    private var hotkeyRunLoopSource: CFRunLoopSource?
+
     // Modifier key tracking
     private var isDashActive = false
     private var isToggleActive = false
@@ -33,22 +42,156 @@ public final class ScrollManager {
     private var cachedTargetPid: pid_t = 0
     private var cachedTargetBundleId: String? = nil
 
-    private init() {}
+    private init() {
+        NotificationCenter.default.addObserver(
+            forName: ConfigManager.configDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncWithConfig()
+        }
+    }
+
+    public func syncWithConfig() {
+        let isEnabled = ConfigManager.shared.activeConfig.smoothScroll?.enabled ?? false
+        if isEnabled && !isActive {
+            start()
+        } else if !isEnabled && isActive {
+            stop()
+        }
+    }
 
     public func start() {
         guard !isActive else { return }
+        let isEnabled = ConfigManager.shared.activeConfig.smoothScroll?.enabled ?? false
+        guard isEnabled else { return }
+
+        let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+
+        // 1. Dedicated Scroll Wheel Event Tap at .cgAnnotatedSessionEventTap / .tailAppendEventTap
+        let scrollMask: CGEventMask = (1 << CGEventType.scrollWheel.rawValue)
+        guard let sTap = CGEvent.tapCreate(
+            tap: .cgAnnotatedSessionEventTap,
+            place: .tailAppendEventTap,
+            options: .defaultTap,
+            eventsOfInterest: scrollMask,
+            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
+                let manager = Unmanaged<ScrollManager>.fromOpaque(refcon).takeUnretainedValue()
+                return manager.handleScrollEvent(proxy: proxy, type: type, event: event)
+            },
+            userInfo: observer
+        ) ?? CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .tailAppendEventTap,
+            options: .defaultTap,
+            eventsOfInterest: scrollMask,
+            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
+                let manager = Unmanaged<ScrollManager>.fromOpaque(refcon).takeUnretainedValue()
+                return manager.handleScrollEvent(proxy: proxy, type: type, event: event)
+            },
+            userInfo: observer
+        ) else {
+            Log.error("ScrollManager: Failed to create scrollEventTap.")
+            return
+        }
+
+        self.scrollTap = sTap
+        let sSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, sTap, 0)
+        self.scrollRunLoopSource = sSource
+        CFRunLoopAddSource(CFRunLoopGetMain(), sSource, .commonModes)
+        CGEvent.tapEnable(tap: sTap, enable: true)
+
+        // 2. Passive Left Mouse Down Tap for instant scroll braking (.listenOnly)
+        let mouseMask: CGEventMask = (1 << CGEventType.leftMouseDown.rawValue)
+        if let mTap = CGEvent.tapCreate(
+            tap: .cgAnnotatedSessionEventTap,
+            place: .tailAppendEventTap,
+            options: .listenOnly,
+            eventsOfInterest: mouseMask,
+            callback: { (_, _, event, refcon) -> Unmanaged<CGEvent>? in
+                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
+                let manager = Unmanaged<ScrollManager>.fromOpaque(refcon).takeUnretainedValue()
+                manager.brake()
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: observer
+        ) {
+            self.mouseTap = mTap
+            let mSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, mTap, 0)
+            self.mouseRunLoopSource = mSource
+            CFRunLoopAddSource(CFRunLoopGetMain(), mSource, .commonModes)
+            CGEvent.tapEnable(tap: mTap, enable: true)
+        }
+
+        // 3. Passive Flags Changed Tap for modifier shortcuts (.listenOnly)
+        let hotkeyMask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
+        if let hTap = CGEvent.tapCreate(
+            tap: .cgAnnotatedSessionEventTap,
+            place: .tailAppendEventTap,
+            options: .listenOnly,
+            eventsOfInterest: hotkeyMask,
+            callback: { (_, _, event, refcon) -> Unmanaged<CGEvent>? in
+                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
+                let manager = Unmanaged<ScrollManager>.fromOpaque(refcon).takeUnretainedValue()
+                let flags = NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue))
+                manager.updateModifiers(flags: flags)
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: observer
+        ) {
+            self.hotkeyTap = hTap
+            let hSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, hTap, 0)
+            self.hotkeyRunLoopSource = hSource
+            CFRunLoopAddSource(CFRunLoopGetMain(), hSource, .commonModes)
+            CGEvent.tapEnable(tap: hTap, enable: true)
+        }
+
         isActive = true
         ScrollPoster.shared.create()
         ScrollPoster.shared.startKeeper()
-        Log.info("ScrollManager started with CVDisplayLink display sync.")
+        Log.info("ScrollManager started with dedicated .cgAnnotatedSessionEventTap.")
     }
 
     public func stop() {
         guard isActive else { return }
         isActive = false
+
+        if let tap = scrollTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = scrollRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            }
+            CFMachPortInvalidate(tap)
+        }
+        scrollTap = nil
+        scrollRunLoopSource = nil
+
+        if let tap = mouseTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = mouseRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            }
+            CFMachPortInvalidate(tap)
+        }
+        mouseTap = nil
+        mouseRunLoopSource = nil
+
+        if let tap = hotkeyTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = hotkeyRunLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            }
+            CFMachPortInvalidate(tap)
+        }
+        hotkeyTap = nil
+        hotkeyRunLoopSource = nil
+
         ScrollPoster.shared.stop()
         ScrollPoster.shared.stopKeeper()
-        Log.info("ScrollManager stopped.")
+        ScrollPoster.shared.reset()
+        Log.info("ScrollManager completely stopped and all scroll taps destroyed.")
     }
 
     public func brake() {
@@ -83,23 +226,35 @@ public final class ScrollManager {
         }
     }
 
-    /// Process incoming scroll wheel events from CGEventTap
-    /// Returns: nil if event was swallowed and replaced by smooth interpolated frames,
-    /// or the event if it should be passed through unmodified.
-    public func handleScrollWheel(event: CGEvent) -> Unmanaged<CGEvent>? {
+    private func handleScrollEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let tap = scrollTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            ScrollPoster.shared.stop(.trackingEnd)
+            return Unmanaged.passUnretained(event)
+        }
+
+        guard type == .scrollWheel else {
+            return Unmanaged.passUnretained(event)
+        }
+
         // Skip synthetic events synthesized by GestureDaemon
         if ScrollDispatchContext.isSyntheticSmoothEvent(event) {
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
+        }
+
+        // Skip if thumb button is held down (EventTapManager motionTap handles thumb + scroll for volume)
+        if EventTapManager.shared.isPaused {
+            return Unmanaged.passUnretained(event)
         }
 
         let globalConfig = ConfigManager.shared.activeConfig.smoothScroll ?? SmoothScrollConfig()
         guard globalConfig.enabled else {
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         // If Block modifier is held (e.g. Command for CAD/zoom), pass raw event through
         if isBlockActive {
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         let scrollEvent = ScrollEvent(with: event)
@@ -107,12 +262,12 @@ public final class ScrollManager {
         let hasHorizontalDelta = scrollEvent.xData.valid && scrollEvent.xData.usableValue != 0.0
 
         guard hasVerticalDelta || hasHorizontalDelta else {
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         // Pass native trackpads and Magic Mouse through untouched!
         if scrollEvent.isTrackpad() {
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         // Detect target application
@@ -121,7 +276,7 @@ public final class ScrollManager {
 
         // Check if event is from remote desktop application
         if isRemoteControlApplication(event: event, targetPid: targetPid, bundleId: targetBundleId) {
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         // Check per-application profile overrides
@@ -130,13 +285,13 @@ public final class ScrollManager {
            let profileSmoothEnabled = appProfile.smoothScrollEnabled,
            !profileSmoothEnabled {
             // App explicitly disabled smooth scrolling (e.g. Blender, games, etc.)
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         // Smooth configuration parameters
-        var enableSmooth = globalConfig.enabled
-        var enableSmoothVertical = globalConfig.smoothVertical
-        var enableSmoothHorizontal = globalConfig.smoothHorizontal
+        let enableSmooth = globalConfig.enabled
+        let enableSmoothVertical = globalConfig.smoothVertical
+        let enableSmoothHorizontal = globalConfig.smoothHorizontal
         let enableReverseVertical = globalConfig.reverseVertical
         let enableReverseHorizontal = globalConfig.reverseHorizontal
 
@@ -209,22 +364,24 @@ public final class ScrollManager {
             if shouldSmoothHorizontal {
                 ScrollEvent.clearX(scrollEvent)
             }
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         if shouldSmoothAny {
             if ScrollPoster.shared.isAvailable {
                 return nil // Swallow raw discrete wheel event!
             } else {
-                return Unmanaged.passRetained(event)
+                return Unmanaged.passUnretained(event)
             }
         }
 
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
 
     private func resolveBundleIdentifier(for pid: pid_t) -> String? {
-        guard pid > 1 else { return nil }
+        guard pid > 1 else {
+            return NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        }
         if pid == cachedTargetPid, let bundleId = cachedTargetBundleId {
             return bundleId
         }
@@ -256,4 +413,3 @@ public final class ScrollManager {
         return false
     }
 }
-

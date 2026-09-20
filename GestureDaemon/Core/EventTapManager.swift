@@ -109,7 +109,7 @@ public final class EventTapManager {
     public func start() {
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
-        // Primary tap: buttons, keys, modifiers, scroll wheel, and left click (for scroll braking).
+        // Primary tap: buttons, keys, modifiers.
         // mouseMoved is NEVER in primaryMask so normal mouse/trackpad motion has ZERO CPU overhead!
         var primaryMask: CGEventMask = (1 << CGEventType.otherMouseDown.rawValue)
                                      | (1 << CGEventType.otherMouseUp.rawValue)
@@ -117,11 +117,10 @@ public final class EventTapManager {
                                      | (1 << CGEventType.keyDown.rawValue)
                                      | (1 << CGEventType.keyUp.rawValue)
                                      | (1 << CGEventType.flagsChanged.rawValue)
-                                     | (1 << CGEventType.scrollWheel.rawValue)
-                                     | (1 << CGEventType.leftMouseDown.rawValue)
 
         if diagnosticMode {
-            primaryMask |= (1 << CGEventType.leftMouseUp.rawValue)
+            primaryMask |= (1 << CGEventType.leftMouseDown.rawValue)
+                        | (1 << CGEventType.leftMouseUp.rawValue)
                         | (1 << CGEventType.rightMouseDown.rawValue)
                         | (1 << CGEventType.rightMouseUp.rawValue)
         }
@@ -266,19 +265,6 @@ public final class EventTapManager {
             default:
                 break
             }
-        }
-
-        // Smooth Scroll hooks: modifier tracking & left click braking
-        if type == .flagsChanged {
-            let flags = NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue))
-            ScrollManager.shared.updateModifiers(flags: flags)
-        } else if type == .leftMouseDown {
-            ScrollManager.shared.brake()
-        } else if type == .scrollWheel {
-            if isPaused || stateMachine.isEngaged {
-                return Unmanaged.passRetained(event)
-            }
-            return ScrollManager.shared.handleScrollWheel(event: event)
         }
 
         // 1. Magic Thumb Button handling (Logitech hardware fallback: Cmd+Option+Tab macro)

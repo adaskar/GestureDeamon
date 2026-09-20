@@ -27,36 +27,16 @@ public final class ScrollEvent {
     }
 
     // MARK: - Trackpad Discrimination
-    private static var isTrackpadCallSamplingRate = 3
-    private static var isTrackpadCallCount = 2
-    private static var isTrackpadCallCache = true
-
     public static func isTrackpad(with event: CGEvent) -> Bool {
-        isTrackpadCallCount += 1
-        if isTrackpadCallCount % isTrackpadCallSamplingRate == 0 {
-            isTrackpadCallCache = false
+        let isContinuous = event.getDoubleValueField(.scrollWheelEventIsContinuous)
+        let momentumPhase = event.getDoubleValueField(.scrollWheelEventMomentumPhase)
+        let scrollPhase = event.getDoubleValueField(.scrollWheelEventScrollPhase)
 
-            let momentumPhase = event.getDoubleValueField(.scrollWheelEventMomentumPhase)
-            let scrollPhase = event.getDoubleValueField(.scrollWheelEventScrollPhase)
-            let scrollCount = event.getDoubleValueField(.scrollWheelEventScrollCount)
-
-            if momentumPhase != 0.0 || scrollPhase != 0.0 || scrollCount != 0.0 {
-                // Non-zero hardware phases or accumulated acceleration indicate a genuine Trackpad or Magic Mouse
-                isTrackpadCallCache = true
-            }
-
-            // Exclude Logitech daemon synthetic packets if applicable
-            if isTrackpadCallCache {
-                let sourcePid = pid_t(event.getIntegerValueField(.eventSourceUnixProcessID))
-                if sourcePid > 0, let app = NSRunningApplication(processIdentifier: sourcePid),
-                   app.bundleIdentifier == "com.logitech.manager.daemon" {
-                    isTrackpadCallCache = false
-                }
-            }
-
-            isTrackpadCallCount = isTrackpadCallSamplingRate - 1
+        // Native trackpads, Magic Mouse, and continuous momentum report isContinuous != 0 or active phases
+        if isContinuous != 0.0 || momentumPhase != 0.0 || scrollPhase != 0.0 {
+            return true
         }
-        return isTrackpadCallCache
+        return false
     }
 
     public func isTrackpad() -> Bool {

@@ -40,7 +40,10 @@ public final class ScrollDispatchContext {
     @discardableResult
     public func capture(event: CGEvent) -> Bool {
         guard let template = event.copy() else { return false }
-        let pid = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
+        var pid = pid_t(event.getIntegerValueField(.eventTargetUnixProcessID))
+        if pid <= 1, let frontmost = NSWorkspace.shared.frontmostApplication {
+            pid = frontmost.processIdentifier
+        }
 
         os_unfair_lock_lock(&lock)
         state.eventTemplate = template
