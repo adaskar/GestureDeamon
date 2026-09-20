@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.0] - 2026-09-20
+
+### ✨ Added
+
+- **🖱 Native Smooth Scrolling Engine** — Full CVDisplayLink-based smooth scrolling for discrete mouse wheels (Logitech Unifying/Bolt receivers and direct Bluetooth LE). Transforms choppy line-by-line scroll wheel ticks into fluid, momentum-aware inertia scrolling that is visually indistinguishable from a trackpad.
+  - **Trackpad Phase Simulation** — Emits correctly sequenced `scrollWheelEventScrollPhase` / `scrollWheelEventMomentumPhase` values so every app that respects macOS scroll momentum (Safari, Maps, PDFs, Xcode canvas) gets natural kinetic deceleration.
+  - **Configurable feel** — Speed multiplier, duration/inertia slider, dead-zone threshold, and step normalization, all tunable from the new Smooth Scrolling Preferences tab.
+  - **Modifier shortcuts**: hold `Option` for 5× dash scroll, `Shift` to redirect vertical wheel to horizontal axis, `Command` to bypass smoothing entirely — all evaluated from event flags with zero background taps.
+  - **Per-application opt-out** — Smooth scrolling can be disabled per app bundle ID from the App Profiles tab (e.g. remote desktop clients bypass smoothing automatically).
+  - **Remote desktop auto-bypass** — Automatic pass-through for TeamViewer, AnyDesk, Parsec, RustDesk, Microsoft Remote Desktop, VNC Viewer, TigerVNC, and NeeDisplay.
+  - **Discrete wheel detection** — Zero-allocation fast path rejects trackpad, Magic Mouse, continuous momentum, and gesture liftoff events without entering the smooth path.
+  - **Reverse scroll** — Independent vertical/horizontal inversion, correctly honoured when shift-redirecting vertical to horizontal.
+
+- **🎛 Smooth Scrolling Preferences Tab** — Full SwiftUI panel for all smooth scrolling parameters with live preview sliders and per-axis toggles.
+
+- **📱 App Profiles Preferences Tab** — New dedicated tab to manage per-application profiles including smooth scroll override per app.
+
+- **🔀 Menu Bar Smooth Scrolling Toggle** — Enable/disable smooth scrolling directly from the menu bar without opening Preferences.
+
+### 🐛 Fixed
+
+- **🔋 Battery info missing after system wake** — Mouse battery percentage now remains visible immediately on wake (preserved from the last reading before sleep) and refreshes with a fresh HID++ reading as soon as the Bluetooth link is re-established. A one-shot safety retry at +5 s after wake catches edge cases where the BLE stack silently drops the initial battery request during link re-establishment.
+
+### ⚡ Performance
+
+- **ScrollFilter output lag eliminated** — The smoothing filter previously returned the prior frame's value (`y0`) instead of the current frame (`y1`), adding one full display-refresh of unnecessary output lag (~8 ms at 120 Hz, ~16 ms at 60 Hz). Now returns the current frame.
+- **Lock-free scroll frame posting** — `ScrollDispatchContext.postDirectly` previously acquired a second `os_unfair_lock` per CVDisplayLink frame to validate generation and TTL. TTL is now validated inside `preparePostingSnapshot` while the lock is already held, eliminating the redundant acquisition entirely.
+- **Single time query per display frame** — `ScrollPoster.processing()` previously called `CFAbsoluteTimeGetCurrent()` twice per frame. Reduced to a single call.
+- **Zero-copy scroll config on hot path** — `ScrollManager` now caches `SmoothScrollConfig` as a private value type, updated only on config-change notifications. Eliminates the full `AppConfig` struct copy (~400 B) on every raw scroll event (up to 1 000/s on high-polling mice).
+- **Dead code removal** — Eliminated a redundant `enabled` guard in `ScrollManager.handleScrollEvent` (the flag was already gated by an earlier guard-exit). Removed `Interpolator.smoothStep2` and `smoothStep3` (unused, never called, incorrect normalization for mid-animation use).
+
+---
+
 ## [0.0.1] - 2026-09-19
 
 ### 🚀 Initial Public Release
