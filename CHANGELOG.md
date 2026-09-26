@@ -35,7 +35,10 @@ GestureDaemon 1.0.0 marks our first stable, production-ready release! This miles
 - **⚡ Zero Bloat & Dual-Transport Architecture**:
   - True 0.0% idle CPU with ephemeral event-tap lifecycle.
   - Automatic hardware button diversion (`0x1B04` CID `0x00C3`) over both USB Unifying/Bolt receivers and direct Bluetooth Low Energy.
-  - Display sleep and ACPI sleep-wake resilience with staged re-diversion and telemetry preservation.
+  - **Robust Staged Sleep / Wake Recovery Engine**:
+    - Fixed an issue where gestures stopped responding after display sleep or system sleep until manually toggled in the menu bar.
+    - Implemented a unified staged recovery pipeline ($t=0$, $+1.0s$, $+2.5s$, $+4.0s$) to re-issue hardware button diversion commands over Bluetooth LE once the radio link stabilizes after low-power sleep.
+    - Updated `EventTapManager.ensureTapActive()` to detect invalidated Mach ports (`CFMachPortIsValid`) following sleep and automatically reconstruct the session event tap.
 
 ---
 
