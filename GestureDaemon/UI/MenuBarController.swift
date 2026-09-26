@@ -91,12 +91,15 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
                 } else {
                     button.title = ""
                 }
+                let devName = HIDPlusPlusManager.shared.connectedDeviceName ?? "Mouse"
+                button.toolTip = "GestureDaemon: \(devName) · \(battery.state.rawValue) (\(battery.percentage)%)"
             } else {
                 if let image = NSImage(systemSymbolName: "computermouse.fill", accessibilityDescription: "Mouse") {
                     image.isTemplate = true
                     button.image = image
                 }
                 button.title = ""
+                button.toolTip = "GestureDaemon: Searching for mouse..."
             }
         } else {
             if let image = NSImage(systemSymbolName: "cursorarrow.motionlines", accessibilityDescription: "GestureDaemon") {
@@ -178,7 +181,11 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             var devTitle = devName
             if let battery = HIDPlusPlusManager.shared.batteryInfo {
                 let chargeStr = battery.isCharging ? " ⚡" : ""
-                devTitle += "  ·  \(battery.percentage)%\(chargeStr)"
+                if battery.isCoarse {
+                    devTitle += "  ·  \(battery.state.rawValue) (\(battery.percentage)%)\(chargeStr)"
+                } else {
+                    devTitle += "  ·  \(battery.percentage)%\(chargeStr)"
+                }
             }
             let devItem = NSMenuItem(title: devTitle, action: nil, keyEquivalent: "")
 

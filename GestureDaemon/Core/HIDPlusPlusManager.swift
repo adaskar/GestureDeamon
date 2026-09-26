@@ -17,12 +17,32 @@ public final class HIDPlusPlusManager {
     }
 
     public struct BatteryInfo: Equatable {
+        public enum LevelState: String, Equatable {
+            case full = "Full"
+            case good = "Good"
+            case low = "Low"
+            case critical = "Critical"
+        }
+
         public let percentage: Int
         public let isCharging: Bool
+        public let state: LevelState
+        public let isCoarse: Bool
 
-        public init(percentage: Int, isCharging: Bool) {
+        public init(percentage: Int, isCharging: Bool, state: LevelState? = nil, isCoarse: Bool = false) {
             self.percentage = percentage
             self.isCharging = isCharging
+            self.isCoarse = isCoarse
+            if let state = state {
+                self.state = state
+            } else {
+                switch percentage {
+                case 80...100: self.state = .full
+                case 35..<80:  self.state = .good
+                case 15..<35:  self.state = .low
+                default:       self.state = .critical
+                }
+            }
         }
     }
 
@@ -839,24 +859,77 @@ public final class HIDPlusPlusManager {
                 if managed.isUnifiedBattery {
                     // Function 1 response or Event 0 notification
                     if fn == 0x01 || fn == 0x00 {
-                        let percentage = Int(bytes[4])
-                        let chargingStatus = bytes[5]
+                        let rawPercentage = Int(bytes[4])
+                        let coarseByte = bytes[5]
+                        let chargingStatus = bytes[6]
                         let isCharging = (chargingStatus == 1 || chargingStatus == 2 || chargingStatus == 3)
-                        let info = BatteryInfo(percentage: min(100, max(0, percentage)), isCharging: isCharging)
+
+                        let state: BatteryInfo.LevelState
+                        let percentage: Int
+                        var isCoarse = false
+
+                        switch coarseByte {
+                        case 8:
+                            state = .full
+                            percentage = rawPercentage > 0 ? min(100, max(0, rawPercentage)) : 90
+                            isCoarse = true
+                        case 4:
+                            state = .good
+                            percentage = rawPercentage > 0 ? min(100, max(0, rawPercentage)) : 50
+                            isCoarse = true
+                        case 2:
+                            state = .low
+                            percentage = rawPercentage > 0 ? min(100, max(0, rawPercentage)) : 20
+                            isCoarse = true
+                        case 1:
+                            state = .critical
+                            percentage = rawPercentage > 0 ? min(100, max(0, rawPercentage)) : 5
+                            isCoarse = true
+                        default:
+                            percentage = min(100, max(0, rawPercentage))
+                            switch percentage {
+                            case 80...100: state = .full
+                            case 35..<80:  state = .good
+                            case 15..<35:  state = .low
+                            default:       state = .critical
+                            }
+                            if percentage == 50 || percentage == 20 || percentage == 5 || percentage == 90 {
+                                isCoarse = true
+                            }
+                        }
+
+                        let info = BatteryInfo(percentage: percentage, isCharging: isCharging, state: state, isCoarse: isCoarse)
                         self.batteryInfo = info
-                        Log.info("🔋 Battery Status (Unified): \(info.percentage)% \(info.isCharging ? "(Charging ⚡)" : "")")
+                        Log.info("🔋 Battery Status (Unified): \(info.state.rawValue) (\(info.percentage)%) \(info.isCharging ? "(Charging ⚡)" : "")")
                         NotificationCenter.default.post(name: .hidBatteryStatusDidChange, object: info)
                         return
                     }
                 } else {
                     // Function 0 response or Event 0 notification
                     if fn == 0x00 {
-                        let percentage = Int(bytes[4])
+                        let rawPercentage = Int(bytes[4])
                         let statusFlags = bytes[6]
                         let isCharging = ((statusFlags & 0x01) != 0 || statusFlags == 1 || statusFlags == 2)
-                        let info = BatteryInfo(percentage: min(100, max(0, percentage)), isCharging: isCharging)
+                        let percentage = min(100, max(0, rawPercentage))
+                        let state: BatteryInfo.LevelState
+                        var isCoarse = false
+                        switch percentage {
+                        case 80...100:
+                            state = .full
+                            if percentage == 90 || percentage == 100 { isCoarse = true }
+                        case 35..<80:
+                            state = .good
+                            if percentage == 50 { isCoarse = true }
+                        case 15..<35:
+                            state = .low
+                            if percentage == 20 { isCoarse = true }
+                        default:
+                            state = .critical
+                            if percentage == 5 { isCoarse = true }
+                        }
+                        let info = BatteryInfo(percentage: percentage, isCharging: isCharging, state: state, isCoarse: isCoarse)
                         self.batteryInfo = info
-                        Log.info("🔋 Battery Status (Legacy): \(info.percentage)% \(info.isCharging ? "(Charging ⚡)" : "")")
+                        Log.info("🔋 Battery Status (Legacy): \(info.state.rawValue) (\(info.percentage)%) \(info.isCharging ? "(Charging ⚡)" : "")")
                         NotificationCenter.default.post(name: .hidBatteryStatusDidChange, object: info)
                         return
                     }

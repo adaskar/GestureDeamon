@@ -107,15 +107,22 @@ public struct GeneralPreferencesView: View {
                         HStack(spacing: 6) {
                             Image(systemName: batteryIconName(for: battery))
                                 .foregroundColor(battery.percentage <= 20 && !battery.isCharging ? .red : .primary)
-                            Text("\(battery.percentage)%")
-                                .font(.subheadline)
-                                .monospacedDigit()
+                            if battery.isCoarse {
+                                Text("\(battery.state.rawValue) (\(battery.percentage)%)")
+                                    .font(.subheadline)
+                                    .monospacedDigit()
+                            } else {
+                                Text("\(battery.percentage)%")
+                                    .font(.subheadline)
+                                    .monospacedDigit()
+                            }
                             if battery.isCharging {
                                 Image(systemName: "bolt.fill")
                                     .font(.caption2)
                                     .foregroundColor(.yellow)
                             }
                         }
+                        .help(battery.isCoarse ? "Logitech hardware reports stepped battery levels: Full (90%), Good (50%), Low (20%), Critical (5%)." : "Live battery telemetry reported via HID++.")
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(Color(NSColor.controlBackgroundColor))
