@@ -1,6 +1,6 @@
 # GestureDaemon 🪟🖱️
 
-[![Version](https://img.shields.io/badge/version-1.0.0-informational?style=flat-square)](https://github.com/adaskar/GestureDeamon/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/version-1.0.1-informational?style=flat-square)](https://github.com/adaskar/GestureDeamon/releases/tag/v1.0.1)
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-black?style=flat-square&logo=apple)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange?style=flat-square&logo=swift)](https://developer.apple.com/swift/)
 [![Architecture](https://img.shields.io/badge/Architecture-Universal%20(Apple%20Silicon%20%2B%20Intel)-blue?style=flat-square)](https://developer.apple.com)

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-09-26
+
+### 🐛 Fixed & Improved
+
+- **🌙 Rock-Solid Staged Sleep / Wake Recovery Engine**:
+  - **Fixed Gesture Inactivity After Sleep** — Resolved a persistent bug where mouse gestures stopped responding after display sleep, screen lock, or system sleep until manually toggled via "Pause / Resume Gestures" in the menu bar.
+  - **Direct Bluetooth LE Diversion** — Fixed `reapplyHardwareDiversion()` to directly divert gesture buttons (`0x1B04` CID `0x00C3` / `0x00D7`) over direct Bluetooth Low Energy when `reprogFeatureIndex` is cached.
+  - **Staged Link Recovery Pipeline** — Unified sleep recovery with staged re-diversion passes at $t=0$, $+1.0s$, $+2.5s$, and $+4.0s$ to reliably catch Logitech mice as soon as their internal Bluetooth radio link renegotiates after low-power sleep.
+  - **Mach Port Auto-Recreation** — Updated `EventTapManager.ensureTapActive()` to verify `CFMachPortIsValid(...)`, automatically reconstructing the system event tap whenever macOS WindowServer invalidates the underlying Mach port across sleep cycles.
+
+---
+
 ## [1.0.0] - 2026-09-26
 
 ### 🚀 Production Release: General Availability
@@ -35,10 +47,7 @@ GestureDaemon 1.0.0 marks our first stable, production-ready release! This miles
 - **⚡ Zero Bloat & Dual-Transport Architecture**:
   - True 0.0% idle CPU with ephemeral event-tap lifecycle.
   - Automatic hardware button diversion (`0x1B04` CID `0x00C3`) over both USB Unifying/Bolt receivers and direct Bluetooth Low Energy.
-  - **Robust Staged Sleep / Wake Recovery Engine**:
-    - Fixed an issue where gestures stopped responding after display sleep or system sleep until manually toggled in the menu bar.
-    - Implemented a unified staged recovery pipeline ($t=0$, $+1.0s$, $+2.5s$, $+4.0s$) to re-issue hardware button diversion commands over Bluetooth LE once the radio link stabilizes after low-power sleep.
-    - Updated `EventTapManager.ensureTapActive()` to detect invalidated Mach ports (`CFMachPortIsValid`) following sleep and automatically reconstruct the session event tap.
+  - Display sleep and ACPI sleep-wake resilience with staged re-diversion and telemetry preservation.
 
 ---
 
