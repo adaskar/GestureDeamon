@@ -1,6 +1,6 @@
 # GestureDaemon 🪟🖱️
 
-[![Version](https://img.shields.io/badge/version-0.1.0-informational?style=flat-square)](https://github.com/adaskar/GestureDeamon/releases/tag/v0.1.0)
+[![Version](https://img.shields.io/badge/version-1.0.0-informational?style=flat-square)](https://github.com/adaskar/GestureDeamon/releases/tag/v1.0.0)
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-black?style=flat-square&logo=apple)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange?style=flat-square&logo=swift)](https://developer.apple.com/swift/)
 [![Architecture](https://img.shields.io/badge/Architecture-Universal%20(Apple%20Silicon%20%2B%20Intel)-blue?style=flat-square)](https://developer.apple.com)
@@ -66,7 +66,7 @@ Proprietary mouse suites (such as Logitech Options+ / Logi G HUB) run multi-giga
 - 🎛 **Native SwiftUI Preferences (`⌘,`)**: Full graphical settings interface with 6 tabs: **Gestures**, **Side Buttons**, **App Profiles**, **Smooth Scrolling**, **General & Tuning**, and an interactive **Live Calibration Canvas**.
 - 🧪 **Live Tester Canvas**: Real-time visual feedback showing mouse cursor displacement vectors, threshold & deadzone boundary rings, button press state badges, and live gesture recognition.
 - ⌨️ **Interactive Shortcut Recorder**: Effortlessly record custom shortcuts with automatic layout normalization across international keyboards (QWERTY, AZERTY, Turkish Q, Colemak, etc.).
-- 🔋 **Live Battery & Hardware Telemetry**: Native Logitech HID++ 2.0 query engine (`0x1000`/`0x1004`) reports mouse battery percentage and charging state directly in the macOS menu bar. Battery telemetry is rock-solid and preserved across system sleep, screen dimming, and display lock, refreshing automatically upon wake.
+- 🔋 **Live Battery & Hardware Telemetry**: Native Logitech HID++ 2.0 query engine (`0x1000`/`0x1004`) reports mouse battery health (`Good`, `Full`, `Low`, `Critical`) and charging state directly in the macOS menu bar and preferences. Accurately handles both continuous fuel-gauge percentage and stepped voltage comparators (e.g. M720, MX Master series), fully preserved across system sleep, screen dimming, and display lock.
 - 🧼 **Modifier Sanitization**: Unconditionally swallows Logitech's hardware fallback `Cmd+Option+Tab` thumb macro and flushes system modifiers—preventing VS Code or browser tab bars from stealing focus.
 - 🧭 **Universal Side Navigation (Back & Forward)**: Translates side buttons (Buttons 3 & 4) into instant history navigation (`Cmd+[` / `Cmd+]`) across Safari, Chrome, and Finder, with smart IDE navigation (`Ctrl+-` / `Ctrl+Shift+-`) in Visual Studio Code.
 - 📱 **Per-Application Contextual Profiles**: Dynamically override gestures, button bindings, and smooth scrolling behaviour based on the active foreground application.

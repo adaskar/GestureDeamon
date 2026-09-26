@@ -172,15 +172,17 @@ Written in pure Swift using low-level Apple frameworks (`CoreGraphics`, `IOKit`,
   - `HIDPlusPlusManager` queries the connected Logitech device via Root feature index `0x0000` to locate feature `0x1004` (`UNIFIED_BATTERY`) or fallback feature `0x1000` (`BATTERY_STATUS`).
 - **Dual Transport Query Pipeline**:
   - Formats HID++ 2.0 Short (7-byte) and Long (20-byte) report packets routed through USB Unifying/Bolt receivers (`0xFF00`) or direct Bluetooth LE characteristics (`0xFF43:0x0202`).
-- **Asynchronous Parsing & Notification**:
-  - Extracts battery percentage (0–100%) and external power / charging state (`isCharging: Bool`).
+- **Asynchronous Parsing & Qualitative Health Mapping**:
+  - Accurately parses `0x1004` Unified Battery byte 5 coarse levels (`Full`, `Good`, `Low`, `Critical`) and byte 6 charging status.
+  - Normalizes stepped voltage comparator tiers (e.g. 50% $\rightarrow$ `"Good"` on devices like the M720 Triathlon or MX Master series), matching official Logitech Options+ qualitative health presentation while preserving raw percentage capabilities for fuel-gauge equipped hardware.
+  - Extracts external power / charging state (`isCharging: Bool`).
   - Broadcasts `.hidBatteryStatusDidChange` across `NotificationCenter.default`.
-- **Menu Bar Integration**:
-  - `MenuBarController` dynamically updates the status item title and tooltip with real-time battery level and charging indicator (`⚡`).
+- **Menu Bar & Preferences Integration**:
+  - `MenuBarController` dynamically updates the status item title, dropdown menu, and tooltip with real-time battery level and charging indicator (`⚡`).
   - Configurable display styles via `MenuBarIconStyle`:
-    - `"standard"`: Status icon + battery percentage.
+    - `"standard"`: Status icon + battery status.
     - `"minimal"`: Status icon only (battery level shown on menu click/tooltip).
-    - `"percentage"`: Percentage badge only.
+    - `"battery"` / `"batteryWithPercentage"`: Combined mouse + battery status badge.
     - `"hidden"`: Headless background daemon.
 
 ---

@@ -59,14 +59,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 let args = CommandLine.arguments
 
 if args.contains("--version") || args.contains("-v") {
-    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.1"
-    let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "3"
     print("GestureDaemon v\(version) (build \(build))")
     exit(0)
 }
 
 if args.contains("--help") || args.contains("-h") {
-    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.1"
+    let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     print("""
     GestureDaemon v\(version) - Ultra-low latency macOS mouse gestures daemon
 

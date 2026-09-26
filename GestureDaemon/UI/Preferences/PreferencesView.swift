@@ -98,7 +98,7 @@ public struct PreferencesView: View {
                         .font(.title3)
                         .fontWeight(.bold)
 
-                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.1")")
+                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")")
                         .font(.caption2)
                         .fontWeight(.semibold)
                         .foregroundColor(.secondary)

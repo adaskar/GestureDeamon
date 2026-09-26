@@ -169,7 +169,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         HIDPlusPlusManager.shared.refreshBatteryStatus()
 
         // Status Header
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.1"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
         let statusTitle = isPaused ? "GestureDaemon v\(version) (Paused)" : "GestureDaemon v\(version)"
         let statusItemHeader = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
         statusItemHeader.image = NSImage(systemSymbolName: isPaused ? "pause.circle.fill" : "checkmark.circle.fill", accessibilityDescription: nil)

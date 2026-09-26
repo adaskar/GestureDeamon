@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] - 2026-09-26
+
+### 🚀 Production Release: General Availability
+
+GestureDaemon 1.0.0 marks our first stable, production-ready release! This milestone delivers rock-solid hardware stability, complete Logitech Options+ feature parity with zero bloat, and refined battery telemetry.
+
+### ✨ Added & Improved
+
+- **🔋 Qualitative & Stepped Battery Telemetry Engine**:
+  - **Accurate HID++ 2.0 Unified Battery (`0x1004`) Parsing** — Corrected packet parsing for byte 5 coarse levels (`Full`, `Good`, `Low`, `Critical`) and byte 6 charging status.
+  - **Qualitative Health Normalization** — Resolved the confusion where Logitech Options showed *"Battery level is good"* while third-party apps showed an arbitrary `50%`. Devices reporting stepped voltage comparator tiers (such as the M720 Triathlon with AA battery or MX Master series) now display clean qualitative health (`Good`, `Full`, `Low`, `Critical`) across the menu bar, status dropdown, and Preferences.
+  - **Eliminated macOS Bluetooth Discrepancy** — Harmonized presentation so that Logitech hardware status no longer contradicts macOS Bluetooth menu's uncalibrated GATT percentage.
+  - **Centralized `displayText` Formatting** — Automatically chooses between qualitative state (`Good`) for stepped devices and granular percentages (`85%`) for fuel-gauge equipped hardware.
+  - **Informative Preferences Tooltip** — Added helpful contextual explanations describing Logitech hardware voltage telemetry.
+
+- **🖱️ Complete Smooth Scrolling Suite**:
+  - Native CVDisplayLink 120 Hz / 60 Hz inertia engine with trackpad phase simulation (`scrollWheelEventScrollPhase` & momentum).
+  - Configurable sensitivity, speed multiplier, deadzone, and inertia duration in Preferences.
+  - Modifier quick-actions (`Option` 5× dash, `Shift` horizontal redirect, `Cmd` bypass).
+  - Per-app bypass profiles for remote desktops (TeamViewer, Parsec, AnyDesk, Microsoft Remote Desktop).
+
+- **🎛️ Full Native SwiftUI Preferences Window (`⌘,`)**:
+  - 6 dedicated configuration tabs: Gestures, Side Buttons, App Profiles, Smooth Scrolling, General Hardware Tuning, and Live Calibration Tester Canvas.
+  - Interactive international shortcut recorder with keyboard layout normalization.
+
+- **⚡ Zero Bloat & Dual-Transport Architecture**:
+  - True 0.0% idle CPU with ephemeral event-tap lifecycle.
+  - Automatic hardware button diversion (`0x1B04` CID `0x00C3`) over both USB Unifying/Bolt receivers and direct Bluetooth Low Energy.
+  - Display sleep and ACPI sleep-wake resilience with staged re-diversion and telemetry preservation.
+
+---
+
 ## [0.1.0] - 2026-09-20
 
 ### ✨ Added
