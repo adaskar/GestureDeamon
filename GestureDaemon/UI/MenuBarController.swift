@@ -87,12 +87,12 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             if let battery = HIDPlusPlusManager.shared.batteryInfo {
                 button.image = makeMouseBatteryImage(battery: battery)
                 if style == "batteryWithPercentage" {
-                    button.title = " \(battery.percentage)%"
+                    button.title = " \(battery.displayText)"
                 } else {
                     button.title = ""
                 }
                 let devName = HIDPlusPlusManager.shared.connectedDeviceName ?? "Mouse"
-                button.toolTip = "GestureDaemon: \(devName) · \(battery.state.rawValue) (\(battery.percentage)%)"
+                button.toolTip = "GestureDaemon: \(devName) · \(battery.displayText)"
             } else {
                 if let image = NSImage(systemSymbolName: "computermouse.fill", accessibilityDescription: "Mouse") {
                     image.isTemplate = true
@@ -181,11 +181,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             var devTitle = devName
             if let battery = HIDPlusPlusManager.shared.batteryInfo {
                 let chargeStr = battery.isCharging ? " ⚡" : ""
-                if battery.isCoarse {
-                    devTitle += "  ·  \(battery.state.rawValue) (\(battery.percentage)%)\(chargeStr)"
-                } else {
-                    devTitle += "  ·  \(battery.percentage)%\(chargeStr)"
-                }
+                devTitle += "  ·  \(battery.displayText)\(chargeStr)"
             }
             let devItem = NSMenuItem(title: devTitle, action: nil, keyEquivalent: "")
 

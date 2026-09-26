@@ -29,6 +29,10 @@ public final class HIDPlusPlusManager {
         public let state: LevelState
         public let isCoarse: Bool
 
+        public var displayText: String {
+            isCoarse ? state.rawValue : "\(percentage)%"
+        }
+
         public init(percentage: Int, isCharging: Bool, state: LevelState? = nil, isCoarse: Bool = false) {
             self.percentage = percentage
             self.isCharging = isCharging
