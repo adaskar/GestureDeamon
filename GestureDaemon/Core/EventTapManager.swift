@@ -207,7 +207,9 @@ public final class EventTapManager {
     private func handlePrimaryEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             Log.info("Primary EventTap disabled by macOS (\(type == .tapDisabledByTimeout ? "timeout" : "user input/sleep")). Re-enabling...")
-            if let tap = primaryEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
+            // Use ensureTapActive so we also handle the case where macOS fully
+            // invalidated the CFMachPort (not just disabled it).
+            ensureTapActive()
             return Unmanaged.passRetained(event)
         }
 
@@ -455,6 +457,16 @@ public final class EventTapManager {
 
     public func ensureTapActive() {
         if let tap = primaryEventTap {
+            // Check whether the underlying CFMachPort is still valid.
+            // macOS can fully invalidate (not just disable) a CGEventTap port
+            // during sleep/wake cycles.  Calling tapEnable on a dead port is a
+            // silent no-op, so we must detect this and rebuild from scratch.
+            if !CFMachPortIsValid(tap) {
+                Log.info("Primary EventTap CFMachPort is invalid (killed by macOS during sleep). Rebuilding...")
+                stop()
+                start()
+                return
+            }
             if !CGEvent.tapIsEnabled(tap: tap) {
                 Log.info("Primary EventTap was inactive. Re-enabling...")
                 CGEvent.tapEnable(tap: tap, enable: true)
