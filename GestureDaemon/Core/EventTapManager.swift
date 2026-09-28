@@ -10,6 +10,16 @@ public final class EventTapManager {
     private var motionEventTap: CFMachPort?
     private var motionRunLoopSource: CFRunLoopSource?
 
+    // Keyboard tap — only active when needed.
+    // When a HID++ device is open the mouse firmware never sends the Cmd+Opt+Tab
+    // macro, so we can leave this tap OFF entirely while the user types, giving
+    // zero keyboard IPC overhead.  The tap is turned on when:
+    //   • No HID++ device is connected  (macro fallback path may be needed)
+    //   • A shortcut-recording session is open in Preferences
+    //   • A Logitech macro is mid-flight (to handle modifier releases cleanly)
+    private var keyboardEventTap: CFMachPort?
+    private var keyboardRunLoopSource: CFRunLoopSource?
+
     private let stateMachine = GestureStateMachine()
     private var diagnosticMode = false
     public var isPaused: Bool = false {
@@ -22,7 +32,13 @@ public final class EventTapManager {
         }
     }
 
-    private var isLogitechMacroActive = false
+    private var isLogitechMacroActive = false {
+        didSet {
+            if oldValue != isLogitechMacroActive {
+                updateKeyboardTapState()
+            }
+        }
+    }
     private var cmdReleased = false
     private var optReleased = false
     private var macroSafetyTimer: DispatchSourceTimer?
@@ -52,11 +68,13 @@ public final class EventTapManager {
         )
         self.lastRecordedKeyCode = nil
         ensureTapActive()
+        updateKeyboardTapState() // Recording session always needs keyboard tap
     }
 
     public func stopRecordingShortcut() {
         self.activeRecordingSession = nil
         self.lastRecordedKeyCode = nil
+        updateKeyboardTapState() // May now be able to stop keyboard tap
     }
 
     public var isRecordingShortcutActive: Bool {
@@ -83,6 +101,81 @@ public final class EventTapManager {
         stateMachine.onEngagementChanged = { [weak self] engaged in
             self?.setMotionTrackingEnabled(engaged)
         }
+
+        // Watch for HID++ device connection / disconnection so we can turn the
+        // keyboard tap on/off automatically.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleHIDCapabilitiesChanged),
+            name: .hidHardwareCapabilitiesDidChange,
+            object: nil
+        )
+    }
+
+    @objc private func handleHIDCapabilitiesChanged() {
+        updateKeyboardTapState()
+    }
+
+    // MARK: - Keyboard tap lifecycle
+
+    /// Decides whether the keyboard tap should be running and starts/stops it.
+    /// Rules:
+    ///   ON  – no HID++ device open (macro fallback may fire)
+    ///   ON  – shortcut recording session is active
+    ///   ON  – a Logitech macro is currently mid-flight
+    ///   OFF – HID++ device is open AND no recording AND no active macro
+    private func updateKeyboardTapState() {
+        let needsKeyboard = !HIDPlusPlusManager.shared.isDeviceOpen
+                         || activeRecordingSession != nil
+                         || isLogitechMacroActive
+        if needsKeyboard {
+            startKeyboardTap()
+        } else {
+            stopKeyboardTap()
+        }
+    }
+
+    private func startKeyboardTap() {
+        guard keyboardEventTap == nil else { return }
+        let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        let keyMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+                                 | (1 << CGEventType.keyUp.rawValue)
+                                 | (1 << CGEventType.flagsChanged.rawValue)
+
+        guard let kTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: keyMask,
+            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+                guard let refcon = refcon else { return Unmanaged.passRetained(event) }
+                let manager = Unmanaged<EventTapManager>.fromOpaque(refcon).takeUnretainedValue()
+                return manager.handleKeyboardEvent(proxy: proxy, type: type, event: event)
+            },
+            userInfo: observer
+        ) else {
+            Log.error("Failed to create keyboard CGEventTap.")
+            return
+        }
+
+        self.keyboardEventTap = kTap
+        let kSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, kTap, 0)
+        self.keyboardRunLoopSource = kSource
+        CFRunLoopAddSource(CFRunLoopGetMain(), kSource, .commonModes)
+        CGEvent.tapEnable(tap: kTap, enable: true)
+        Log.info("Keyboard event tap started (HID++ device open: \(HIDPlusPlusManager.shared.isDeviceOpen)).")
+    }
+
+    private func stopKeyboardTap() {
+        guard let kTap = keyboardEventTap else { return }
+        CGEvent.tapEnable(tap: kTap, enable: false)
+        if let kSource = keyboardRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), kSource, .commonModes)
+        }
+        CFMachPortInvalidate(kTap)
+        self.keyboardEventTap = nil
+        self.keyboardRunLoopSource = nil
+        Log.info("Keyboard event tap stopped (HID++ device open — keyboard IPC overhead eliminated).")
     }
 
     public func enableDiagnostics(_ enabled: Bool) {
@@ -109,20 +202,23 @@ public final class EventTapManager {
     public func start() {
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
-        // Primary tap: buttons, keys, modifiers.
-        // mouseMoved is NEVER in primaryMask so normal mouse/trackpad motion has ZERO CPU overhead!
+        // Primary tap: mouse buttons only.
+        // keyDown/keyUp/flagsChanged have been removed — they live in the
+        // separate keyboard tap that is only active when actually needed.
+        // mouseMoved is also absent here (lives in the dynamic motion tap).
+        // Result: zero keyboard IPC overhead while typing normally.
         var primaryMask: CGEventMask = (1 << CGEventType.otherMouseDown.rawValue)
                                      | (1 << CGEventType.otherMouseUp.rawValue)
                                      | (1 << CGEventType.otherMouseDragged.rawValue)
-                                     | (1 << CGEventType.keyDown.rawValue)
-                                     | (1 << CGEventType.keyUp.rawValue)
-                                     | (1 << CGEventType.flagsChanged.rawValue)
 
         if diagnosticMode {
             primaryMask |= (1 << CGEventType.leftMouseDown.rawValue)
                         | (1 << CGEventType.leftMouseUp.rawValue)
                         | (1 << CGEventType.rightMouseDown.rawValue)
                         | (1 << CGEventType.rightMouseUp.rawValue)
+                        | (1 << CGEventType.keyDown.rawValue)
+                        | (1 << CGEventType.keyUp.rawValue)
+                        | (1 << CGEventType.flagsChanged.rawValue)
         }
 
         guard let pTap = CGEvent.tapCreate(
@@ -147,7 +243,10 @@ public final class EventTapManager {
         CFRunLoopAddSource(CFRunLoopGetMain(), pSource, .commonModes)
         CGEvent.tapEnable(tap: pTap, enable: true)
 
-        Log.info("Primary event tap engaged (zero motion overhead).")
+        Log.info("Primary event tap engaged (mouse buttons only — zero keyboard/motion overhead).")
+
+        // Start keyboard tap only if it's currently needed.
+        updateKeyboardTapState()
     }
 
     private func startMotionTap() {
@@ -201,8 +300,11 @@ public final class EventTapManager {
         self.primaryEventTap = nil
         self.primaryRunLoopSource = nil
         stopMotionTap()
+        stopKeyboardTap()
         Log.info("Event taps disconnected.")
     }
+
+    // MARK: - Primary event handler (mouse buttons only)
 
     private func handlePrimaryEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -211,39 +313,6 @@ public final class EventTapManager {
             // invalidated the CFMachPort (not just disabled it).
             ensureTapActive()
             return Unmanaged.passRetained(event)
-        }
-
-        // Intercept and swallow keystrokes during active shortcut recording in Preferences UI
-        // This prevents macOS system hotkeys (like Ctrl+Down for App Exposé or Ctrl+Up for Mission Control) from triggering!
-        if let session = activeRecordingSession {
-            if type == .flagsChanged {
-                let mods = KeyCodeHelper.modifiersFromNSEventFlags(NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)))
-                session.onFlagsChanged(mods)
-                return Unmanaged.passRetained(event)
-            } else if type == .keyDown {
-                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-                if keycode == 53 { // Escape cancels recording
-                    activeRecordingSession = nil
-                    session.onCancel()
-                    return nil // SWALLOW Escape
-                }
-                let mods = KeyCodeHelper.modifiersFromNSEventFlags(NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)))
-                if keycode == 51 && mods.isEmpty { // Bare Delete/Backspace clears
-                    activeRecordingSession = nil
-                    session.onClear()
-                    return nil // SWALLOW Delete
-                }
-                lastRecordedKeyCode = keycode
-                activeRecordingSession = nil
-                session.onCapture(UInt16(keycode), mods)
-                return nil // SWALLOW KEY DOWN: Prevents macOS system shortcuts (Exposé, Mission Control, etc.) from firing!
-            } else if type == .keyUp {
-                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-                if keycode == lastRecordedKeyCode || keycode == 53 || keycode == 51 {
-                    lastRecordedKeyCode = nil
-                    return nil // SWALLOW KEY UP
-                }
-            }
         }
 
         if diagnosticMode {
@@ -269,67 +338,11 @@ public final class EventTapManager {
             }
         }
 
-        // 1. Magic Thumb Button handling (Logitech hardware fallback: Cmd+Option+Tab macro)
-        switch type {
-        case .keyDown:
-            let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keycode == 48 && event.flags.contains(.maskCommand) && event.flags.contains(.maskAlternate) {
-                isLogitechMacroActive = true
-                cmdReleased = false
-                optReleased = false
-
-                macroSafetyTimer?.cancel()
-                let safetyTimer = DispatchSource.makeTimerSource(queue: .main)
-                safetyTimer.schedule(deadline: .now() + 1.5)
-                safetyTimer.setEventHandler { [weak self] in
-                    guard let self = self, self.isLogitechMacroActive else { return }
-                    self.isLogitechMacroActive = false
-                    self.clearSystemModifiers()
-                }
-                safetyTimer.resume()
-                self.macroSafetyTimer = safetyTimer
-
-                if !isPaused {
-                    let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 200.0
-                    _ = stateMachine.handleMagicDown(isMacro: true, windowDurationMs: windowMs)
-                }
-                clearSystemModifiers()
-                return nil // ALWAYS SWALLOW Tab key completely (even if paused, prevents VS Code focus stealing)
-            }
-        case .keyUp:
-            let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keycode == 48 && (isLogitechMacroActive || stateMachine.isEngaged) {
-                return nil // Swallow Tab key release only when Logitech macro or gesture was active
-            }
-        case .flagsChanged:
-            let keycode = event.getIntegerValueField(.keyboardEventKeycode)
-            if isLogitechMacroActive && (keycode == 55 || keycode == 58) {
-                let hadCommand = event.flags.contains(.maskCommand)
-                let hadAlternate = event.flags.contains(.maskAlternate)
-
-                // Strip Command & Option from flags so WindowServer & apps never see them active
-                event.flags.remove([.maskCommand, .maskAlternate])
-
-                if keycode == 55 { cmdReleased = true }
-                if keycode == 58 { optReleased = true }
-
-                if (!hadCommand && !hadAlternate) || (cmdReleased && optReleased) {
-                    isLogitechMacroActive = false
-                    macroSafetyTimer?.cancel()
-                    macroSafetyTimer = nil
-                    clearSystemModifiers()
-                }
-                return Unmanaged.passRetained(event)
-            }
-        default:
-            break
-        }
-
         if isPaused {
             return Unmanaged.passRetained(event)
         }
 
-        // 2. Standard multi-button mouse handling (Buttons 3, 4, 5, etc.)
+        // Multi-button mouse handling (Buttons 3, 4, 5, etc.)
         let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
         let config = ConfigManager.shared.activeConfig
 
@@ -367,7 +380,7 @@ public final class EventTapManager {
             }
         }
 
-        // 3. Side Navigation Buttons (Back & Forward) in normal operation
+        // Side Navigation Buttons (Back & Forward) in normal operation
         if (config.enableSideButtons ?? true) && buttonNumber != config.triggerButtonIndex {
             let backIndex = config.backButtonIndex ?? 3
             let forwardIndex = config.forwardButtonIndex ?? 4
@@ -418,6 +431,121 @@ public final class EventTapManager {
         return Unmanaged.passRetained(event)
     }
 
+    // MARK: - Keyboard event handler (dynamic tap — only active when needed)
+
+    private func handleKeyboardEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let tap = keyboardEventTap, CFMachPortIsValid(tap) {
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+            return Unmanaged.passRetained(event)
+        }
+
+        // Intercept and swallow keystrokes during active shortcut recording in Preferences UI.
+        // This prevents macOS system hotkeys (like Ctrl+Down for App Exposé) from triggering!
+        if let session = activeRecordingSession {
+            if type == .flagsChanged {
+                let mods = KeyCodeHelper.modifiersFromNSEventFlags(NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)))
+                session.onFlagsChanged(mods)
+                return Unmanaged.passRetained(event)
+            } else if type == .keyDown {
+                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+                if keycode == 53 { // Escape cancels recording
+                    activeRecordingSession = nil
+                    session.onCancel()
+                    updateKeyboardTapState()
+                    return nil // SWALLOW Escape
+                }
+                let mods = KeyCodeHelper.modifiersFromNSEventFlags(NSEvent.ModifierFlags(rawValue: UInt(event.flags.rawValue)))
+                if keycode == 51 && mods.isEmpty { // Bare Delete/Backspace clears
+                    activeRecordingSession = nil
+                    session.onClear()
+                    updateKeyboardTapState()
+                    return nil // SWALLOW Delete
+                }
+                lastRecordedKeyCode = keycode
+                activeRecordingSession = nil
+                session.onCapture(UInt16(keycode), mods)
+                updateKeyboardTapState()
+                return nil // SWALLOW KEY DOWN: Prevents macOS system shortcuts from firing!
+            } else if type == .keyUp {
+                let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+                if keycode == lastRecordedKeyCode || keycode == 53 || keycode == 51 {
+                    lastRecordedKeyCode = nil
+                    return nil // SWALLOW KEY UP
+                }
+            }
+        }
+
+        if isPaused {
+            return Unmanaged.passRetained(event)
+        }
+
+        // Magic Thumb Button handling (Logitech hardware fallback: Cmd+Option+Tab macro).
+        // This path is only reachable when HID++ is NOT connected (keyboard tap would
+        // be off otherwise), so there is no redundancy with the HID++ gesture path.
+        switch type {
+        case .keyDown:
+            let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+            if keycode == 48 && event.flags.contains(.maskCommand) && event.flags.contains(.maskAlternate) {
+                // Setting isLogitechMacroActive via the property observer triggers
+                // updateKeyboardTapState(), keeping the tap alive through modifier cleanup.
+                isLogitechMacroActive = true
+                cmdReleased = false
+                optReleased = false
+
+                macroSafetyTimer?.cancel()
+                let safetyTimer = DispatchSource.makeTimerSource(queue: .main)
+                safetyTimer.schedule(deadline: .now() + 1.5)
+                safetyTimer.setEventHandler { [weak self] in
+                    guard let self = self, self.isLogitechMacroActive else { return }
+                    self.isLogitechMacroActive = false // property observer calls updateKeyboardTapState
+                    self.clearSystemModifiers()
+                }
+                safetyTimer.resume()
+                self.macroSafetyTimer = safetyTimer
+
+                if !isPaused {
+                    let windowMs = ConfigManager.shared.activeConfig.gestureWindowMs ?? 200.0
+                    _ = stateMachine.handleMagicDown(isMacro: true, windowDurationMs: windowMs)
+                }
+                clearSystemModifiers()
+                return nil // ALWAYS SWALLOW Tab key completely (even if paused, prevents VS Code focus stealing)
+            }
+        case .keyUp:
+            let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+            if keycode == 48 && (isLogitechMacroActive || stateMachine.isEngaged) {
+                return nil // Swallow Tab key release only when Logitech macro or gesture was active
+            }
+        case .flagsChanged:
+            let keycode = event.getIntegerValueField(.keyboardEventKeycode)
+            if isLogitechMacroActive && (keycode == 55 || keycode == 58) {
+                let hadCommand = event.flags.contains(.maskCommand)
+                let hadAlternate = event.flags.contains(.maskAlternate)
+
+                // Strip Command & Option from flags so WindowServer & apps never see them active
+                event.flags.remove([.maskCommand, .maskAlternate])
+
+                if keycode == 55 { cmdReleased = true }
+                if keycode == 58 { optReleased = true }
+
+                if (!hadCommand && !hadAlternate) || (cmdReleased && optReleased) {
+                    isLogitechMacroActive = false // property observer calls updateKeyboardTapState
+                    macroSafetyTimer?.cancel()
+                    macroSafetyTimer = nil
+                    clearSystemModifiers()
+                }
+                return Unmanaged.passRetained(event)
+            }
+        default:
+            break
+        }
+
+        return Unmanaged.passRetained(event)
+    }
+
+    // MARK: - Motion event handler (dynamic tap — only active during gesture engagement)
+
     private func handleMotionEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout {
             if let tap = motionEventTap { CGEvent.tapEnable(tap: tap, enable: true) }
@@ -455,6 +583,8 @@ public final class EventTapManager {
         return nil // Swallow movement while gesture is engaged so cursor stays in place
     }
 
+    // MARK: - Tap health
+
     public func ensureTapActive() {
         if let tap = primaryEventTap {
             // Check whether the underlying CFMachPort is still valid.
@@ -475,12 +605,13 @@ public final class EventTapManager {
             Log.info("Primary EventTap missing. Starting...")
             start()
         }
+        updateKeyboardTapState()
     }
 
     public func resetState() {
         macroSafetyTimer?.cancel()
         macroSafetyTimer = nil
-        isLogitechMacroActive = false
+        isLogitechMacroActive = false // property observer calls updateKeyboardTapState
         cmdReleased = false
         optReleased = false
         stateMachine.reset()

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2026-09-28
+
+### 🐛 Fixed
+
+- **🌙 Post-Sleep Single-Click Not Registering** — Resolved a race condition where the CGEventTap's underlying `CFMachPort` was fully invalidated by macOS during sleep (not merely disabled). `ensureTapActive()` previously called `CGEvent.tapEnable` on the dead port (a silent no-op), leaving the primary event tap unresponsive until the user manually toggled Pause / Resume Gestures. The fix checks `CFMachPortIsValid` first and performs a full `stop()` + `start()` rebuild when the port is dead.
+
+### ⚡ Performance
+
+- **⌨️ Zero Keyboard IPC Overhead While Typing** — Eliminated the CPU spike caused by keyboard events (`keyDown`, `keyUp`, `flagsChanged`) being intercepted system-wide even while typing in unrelated apps. Keyboard event interception is now handled by a separate dynamic tap (mirroring the existing motion-tap pattern) that is only active when genuinely needed: when no HID++ device is open (macro fallback path), during shortcut recording in Preferences, or while a Logitech macro is mid-flight for modifier cleanup. With an HID++ device connected the keyboard tap stays fully off — zero Mach IPC round-trips per keystroke.
+
+---
+
 ## [1.0.1] - 2026-09-26
 
 ### 🐛 Fixed & Improved
