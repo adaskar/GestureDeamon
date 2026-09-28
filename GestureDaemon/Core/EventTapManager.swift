@@ -121,12 +121,20 @@ public final class EventTapManager {
 
     /// Decides whether the keyboard tap should be running and starts/stops it.
     /// Rules:
-    ///   ON  – no HID++ device open (macro fallback may fire)
+    ///   ON  – Logitech device is managed but HID++ not yet open
+    ///         (transient discovery window — mouse firmware may still send the
+    ///          Cmd+Opt+Tab macro before diversion is acknowledged)
     ///   ON  – shortcut recording session is active
     ///   ON  – a Logitech macro is currently mid-flight
-    ///   OFF – HID++ device is open AND no recording AND no active macro
+    ///   OFF – no Logitech device present at all (disconnected / never plugged in)
+    ///   OFF – HID++ device is open and diverted (normal operation)
     private func updateKeyboardTapState() {
-        let needsKeyboard = !HIDPlusPlusManager.shared.isDeviceOpen
+        let hid = HIDPlusPlusManager.shared
+        // Only enable the macro-fallback tap when a Logitech device is actually
+        // present in the system. If no device is managed, the mouse firmware
+        // cannot send Cmd+Opt+Tab regardless, so the tap would just burn CPU.
+        let macroFallbackNeeded = hid.hasManagedDevice && !hid.isDeviceOpen
+        let needsKeyboard = macroFallbackNeeded
                          || activeRecordingSession != nil
                          || isLogitechMacroActive
         if needsKeyboard {

@@ -74,6 +74,10 @@ public final class HIDPlusPlusManager {
     public var isBatterySupported: Bool {
         activeManagedDevice?.batteryFeatureIndex != nil
     }
+    /// True when at least one Logitech IOHIDDevice is being tracked (even if the
+    /// HID++ open / feature-discovery handshake is still in progress).
+    /// False when no Logitech hardware is physically present in the system.
+    public var hasManagedDevice: Bool { !managedDevices.isEmpty }
 
     private final class ManagedDevice {
         let device: IOHIDDevice
