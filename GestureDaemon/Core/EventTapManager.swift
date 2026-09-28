@@ -104,16 +104,17 @@ public final class EventTapManager {
 
         // Watch for HID++ device connection / disconnection so we can turn the
         // keyboard tap on/off automatically.
+        // IMPORTANT: use the block-based form — EventTapManager is not an NSObject
+        // subclass, so the selector-based addObserver(_:selector:...) form is
+        // unreliable at runtime (ObjC cannot guarantee performSelector: on a
+        // non-NSObject Swift type). The block form works with any Swift type.
         NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleHIDCapabilitiesChanged),
-            name: .hidHardwareCapabilitiesDidChange,
-            object: nil
-        )
-    }
-
-    @objc private func handleHIDCapabilitiesChanged() {
-        updateKeyboardTapState()
+            forName: .hidHardwareCapabilitiesDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateKeyboardTapState()
+        }
     }
 
     // MARK: - Keyboard tap lifecycle
