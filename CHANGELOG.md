@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **⌨️ Zero Keyboard IPC Overhead While Typing** — Eliminated the CPU spike caused by keyboard events (`keyDown`, `keyUp`, `flagsChanged`) being intercepted system-wide even while typing in unrelated apps. Keyboard event interception is now handled by a separate dynamic tap (mirroring the existing motion-tap pattern) that is only active when genuinely needed: when no HID++ device is open (macro fallback path), during shortcut recording in Preferences, or while a Logitech macro is mid-flight for modifier cleanup. With an HID++ device connected the keyboard tap stays fully off — zero Mach IPC round-trips per keystroke.
 
+- **🔔 Fixed Dynamic Keyboard Tap Never Turning Off** — The `hidHardwareCapabilitiesDidChange` observer that was supposed to stop the keyboard tap when the HID++ device connected was registered with `addObserver(_:selector:)` targeting a non-`NSObject` Swift class. `NSNotificationCenter` cannot guarantee `performSelector:` dispatch on non-`NSObject` targets, so the callback was silently never firing. Switched to the block-based `addObserver(forName:object:queue:using:)` form which works with any Swift type.
+
 ---
 
 ## [1.0.1] - 2026-09-26
