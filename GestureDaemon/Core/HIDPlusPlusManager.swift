@@ -62,6 +62,7 @@ public final class HIDPlusPlusManager {
     public private(set) var connectedDeviceName: String?
     public private(set) var connectedTransport: TransportType?
     public private(set) var isDeviceOpen = false
+    public private(set) var isHardwareDiverted: Bool = false
     public private(set) var batteryInfo: BatteryInfo?
     public private(set) var currentDpi: Int?
 
@@ -215,6 +216,7 @@ public final class HIDPlusPlusManager {
         // Preserve connectedDeviceName and batteryInfo across transient restarts
         // so the menu bar icon and battery percentage never flash or disappear.
         self.isDeviceOpen = false
+        self.isHardwareDiverted = false
         self.reprogFeatureIndex = nil
         self.currentDpi = nil
         Log.info("HID++ Manager stopped.")
@@ -333,6 +335,7 @@ public final class HIDPlusPlusManager {
         managedDevices.removeValue(forKey: device)
 
         self.isGestureButtonPressed = false
+        self.isHardwareDiverted = false
         updateActiveDevice()
 
         NotificationCenter.default.post(name: .hidBatteryStatusDidChange, object: nil)
@@ -360,6 +363,15 @@ public final class HIDPlusPlusManager {
     public func handleSleep() {
         Log.info("💤 Resetting HID++ gesture state for sleep / display off...")
         self.isGestureButtonPressed = false
+        self.isHardwareDiverted = false
+        self.isDeviceOpen = false
+        for managed in managedDevices.values {
+            managed.isOpen = false
+        }
+        for timer in pendingWakeTimers {
+            timer.cancel()
+        }
+        pendingWakeTimers.removeAll()
     }
 
     /// Schedules staged retries to re-synchronize HID++ diversion and refresh battery
@@ -370,10 +382,9 @@ public final class HIDPlusPlusManager {
         }
         pendingWakeTimers.removeAll()
 
-        // Immediate pass
-        if self.managedDevices.isEmpty {
-            self.restartMatching()
-        } else {
+        // Immediate pass: reapply diversion if devices are already open;
+        // otherwise matching is already underway and stage 1 will verify at +1.0s.
+        if !self.managedDevices.isEmpty {
             self.reapplyHardwareDiversion()
         }
 
@@ -436,7 +447,7 @@ public final class HIDPlusPlusManager {
         updateActiveDevice()
 
         // If no devices or handles are active, restart matching immediately
-        if managedDevices.isEmpty || activeDevice == nil {
+        if managedDevices.isEmpty || activeDevice == nil || !isHardwareDiverted {
             Log.info("☀️ No active device found on display wake. Checking HID Manager...")
             restartMatching()
         }
@@ -651,6 +662,7 @@ public final class HIDPlusPlusManager {
 
     private func divertGestureButtons(device: IOHIDDevice, featureIndex: UInt8, deviceIndex: UInt8) {
         for cid in gestureCIDs {
+            guard managedDevices[device]?.isOpen != false else { break }
             divertControl(device: device, cid: cid, featureIndex: featureIndex, deviceIndex: deviceIndex)
         }
     }
@@ -678,9 +690,17 @@ public final class HIDPlusPlusManager {
 
         let status = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, 0x11, report, report.count)
         if status == kIOReturnSuccess {
+            self.isHardwareDiverted = true
+            NotificationCenter.default.post(name: .hidHardwareCapabilitiesDidChange, object: nil)
             Log.info("Diverted button CID 0x\(String(format: "%04X", cid)) on deviceIndex 0x\(String(format: "%02X", deviceIndex)) for gestures over HID++.")
         } else {
+            self.isHardwareDiverted = false
+            managedDevices[device]?.isOpen = false
+            updateActiveDevice()
             Log.error("Failed to divert button CID 0x\(String(format: "%04X", cid)) on deviceIndex 0x\(String(format: "%02X", deviceIndex)) (status: \(status)).")
+            DispatchQueue.main.async { [weak self] in
+                self?.restartMatching()
+            }
         }
     }
 

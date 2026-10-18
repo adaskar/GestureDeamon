@@ -133,7 +133,7 @@ public final class EventTapManager {
         // Only enable the macro-fallback tap when a Logitech device is actually
         // present in the system. If no device is managed, the mouse firmware
         // cannot send Cmd+Opt+Tab regardless, so the tap would just burn CPU.
-        let macroFallbackNeeded = hid.hasManagedDevice && !hid.isDeviceOpen
+        let macroFallbackNeeded = hid.hasManagedDevice && !hid.isHardwareDiverted
         let needsKeyboard = macroFallbackNeeded
                          || activeRecordingSession != nil
                          || isLogitechMacroActive
@@ -145,7 +145,13 @@ public final class EventTapManager {
     }
 
     private func startKeyboardTap() {
-        guard keyboardEventTap == nil else { return }
+        if let tap = keyboardEventTap {
+            if !CFMachPortIsValid(tap) {
+                stopKeyboardTap()
+            } else {
+                return
+            }
+        }
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
         let keyMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
                                  | (1 << CGEventType.keyUp.rawValue)
@@ -172,7 +178,7 @@ public final class EventTapManager {
         self.keyboardRunLoopSource = kSource
         CFRunLoopAddSource(CFRunLoopGetMain(), kSource, .commonModes)
         CGEvent.tapEnable(tap: kTap, enable: true)
-        Log.info("Keyboard event tap started (HID++ device open: \(HIDPlusPlusManager.shared.isDeviceOpen)).")
+        Log.info("Keyboard event tap started (HID++ hardware diverted: \(HIDPlusPlusManager.shared.isHardwareDiverted)).")
     }
 
     private func stopKeyboardTap() {
@@ -184,7 +190,7 @@ public final class EventTapManager {
         CFMachPortInvalidate(kTap)
         self.keyboardEventTap = nil
         self.keyboardRunLoopSource = nil
-        Log.info("Keyboard event tap stopped (HID++ device open — keyboard IPC overhead eliminated).")
+        Log.info("Keyboard event tap stopped (HID++ hardware diverted — keyboard IPC overhead eliminated).")
     }
 
     public func enableDiagnostics(_ enabled: Bool) {
@@ -604,9 +610,7 @@ public final class EventTapManager {
                 Log.info("Primary EventTap CFMachPort is invalid (killed by macOS during sleep). Rebuilding...")
                 stop()
                 start()
-                return
-            }
-            if !CGEvent.tapIsEnabled(tap: tap) {
+            } else if !CGEvent.tapIsEnabled(tap: tap) {
                 Log.info("Primary EventTap was inactive. Re-enabling...")
                 CGEvent.tapEnable(tap: tap, enable: true)
             }

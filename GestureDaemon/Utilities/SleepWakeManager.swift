@@ -7,6 +7,7 @@ public final class SleepWakeManager: NSObject {
     private var observers: [NSObjectProtocol] = []
     private var lastDisplayWakeTime: CFAbsoluteTime = 0.0
     private var lastSystemWakeTime: CFAbsoluteTime = 0.0
+    private var isSystemSleeping: Bool = false
 
     private override init() {
         super.init()
@@ -63,31 +64,56 @@ public final class SleepWakeManager: NSObject {
     }
 
     private func handleSystemSleep() {
+        isSystemSleeping = true
+        // On sleep: reset gesture state so nothing is left "stuck" while asleep.
         EventTapManager.shared.resetState()
         HIDPlusPlusManager.shared.handleSleep()
     }
 
     private func handleSystemWake() {
         let now = CFAbsoluteTimeGetCurrent()
-        guard now - lastSystemWakeTime > 0.5 else { return }
+        if isSystemSleeping {
+            Log.info("☀️ Processing system wake from deep sleep...")
+            isSystemSleeping = false
+            lastSystemWakeTime = now
+            EventTapManager.shared.ensureTapActive()
+            HIDPlusPlusManager.shared.handleWake()
+            return
+        }
+
+        guard now - lastSystemWakeTime > 2.0 else {
+            Log.info("☀️ System wake suppressed (duplicate within dedup window).")
+            return
+        }
         lastSystemWakeTime = now
 
-        EventTapManager.shared.resetState()
         EventTapManager.shared.ensureTapActive()
         HIDPlusPlusManager.shared.handleWake()
     }
 
     private func handleDisplaySleep() {
+        // On display sleep / session lock: reset gesture state.
         EventTapManager.shared.resetState()
         HIDPlusPlusManager.shared.handleSleep()
     }
 
     private func handleDisplayWake() {
         let now = CFAbsoluteTimeGetCurrent()
-        guard now - lastDisplayWakeTime > 0.5 else { return }
+        if isSystemSleeping {
+            Log.info("☀️ Display wake received during system sleep — promoting to full system wake.")
+            isSystemSleeping = false
+            lastSystemWakeTime = now
+            EventTapManager.shared.ensureTapActive()
+            HIDPlusPlusManager.shared.handleWake()
+            return
+        }
+
+        guard now - lastDisplayWakeTime > 2.0 else {
+            Log.info("☀️ Display wake suppressed (duplicate within dedup window).")
+            return
+        }
         lastDisplayWakeTime = now
 
-        EventTapManager.shared.resetState()
         EventTapManager.shared.ensureTapActive()
         HIDPlusPlusManager.shared.handleDisplayWake()
     }

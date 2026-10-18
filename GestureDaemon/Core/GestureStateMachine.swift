@@ -111,7 +111,9 @@ public final class GestureStateMachine {
             if isCalibrationMode {
                 onCalibrationEvent?(.triggerState(isDown: false, buttonIndex: triggerIndex))
             }
-            return true
+            // Not engaged — we never saw the paired button-down (e.g. a stale resetState()
+            // call between down and up after wake). Do not swallow.
+            return false
         }
         magicGestureTimer?.cancel()
         magicGestureTimer = nil
