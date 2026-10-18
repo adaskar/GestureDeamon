@@ -5,6 +5,15 @@ All notable changes to **GestureDaemon** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-10-18
+
+### 🐛 Fixed
+
+- **🌙 Deep Sleep Wake Gesture & Thumb-Button Recovery** — Resolved a persistent bug where mouse gestures and thumb-button single clicks (Mission Control) stopped responding after waking from deep sleep until manually toggling "Pause / Resume Gestures" from the menu bar:
+  - **Asymmetric Wake Promotion** (`SleepWakeManager`): Fixed a timing bug where macOS posts `screensDidWakeNotification` (display wake) milliseconds before `didWakeNotification` (system wake), causing the system wake handler to be permanently suppressed by the wake deduplication window. A stateful latch now guarantees that the first wake notification triggers a full system wake recovery.
+  - **Stale Device Handle Invalidation & Auto-Recovery** (`HIDPlusPlusManager`): Stale IOKit device handles are now invalidated upon sleep, and hardware diversion status (`isHardwareDiverted`) is explicitly tracked. Failed report writes or lost diversions automatically trigger asynchronous device matching and re-diversion.
+  - **Continuous Fallback Keyboard Tap During Reconnection** (`EventTapManager`): Ensured the keyboard macro fallback tap (`Cmd+Opt+Tab`) remains active whenever hardware diversion is not yet active (`!hid.isHardwareDiverted`), guaranteeing thumb button single clicks work immediately upon wake while Bluetooth links renegotiate.
+
 ---
 
 ## [1.0.2] - 2026-09-28

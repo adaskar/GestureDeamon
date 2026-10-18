@@ -2,8 +2,8 @@ import Foundation
 
 /// Centralized single source of truth for GestureDaemon application version and build metadata.
 public enum AppVersion {
-    public static let current = "1.0.2"
-    public static let build = "5"
+    public static let current = "1.0.3"
+    public static let build = "6"
 
     /// Resolved semantic version string.
     /// Prefers CFBundleShortVersionString from Info.plist if available, falling back to static constant.
